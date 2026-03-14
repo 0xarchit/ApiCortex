@@ -1,40 +1,97 @@
-import axios from 'axios';
+import axios from "axios";
+import { toast } from "sonner";
 
-// Get base URL from environment variable or default to localhost
-const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
+const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 export const apiClient = axios.create({
   baseURL,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
+  withCredentials: true,
 });
 
-// Request interceptor to attach JWT token
+let refreshPromise: Promise<void> | null = null;
+
+const clearAuthCookies = () => {
+  document.cookie =
+    "acx_access=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+  document.cookie =
+    "acx_refresh=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+  document.cookie = "acx_csrf=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+};
+
+const getCookieValue = (name: string): string | null => {
+  const cookies = document.cookie.split("; ");
+  const found = cookies.find((row) => row.startsWith(`${name}=`));
+  if (!found) {
+    return null;
+  }
+  return found.split("=").slice(1).join("=");
+};
+
+const refreshAuth = async () => {
+  if (!refreshPromise) {
+    refreshPromise = apiClient
+      .post("/auth/refresh")
+      .then(() => undefined)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  await refreshPromise;
+};
+
 apiClient.interceptors.request.use((config) => {
-  // Try to get token from document.cookie (client-side only behavior)
-  if (typeof window !== 'undefined') {
-    const cookies = document.cookie.split('; ');
-    const tokenCookie = cookies.find(row => row.startsWith('authToken='));
-    if (tokenCookie) {
-      const token = tokenCookie.split('=')[1];
-      config.headers.Authorization = `Bearer ${token}`;
+  if (
+    ["post", "put", "patch", "delete"].includes(
+      config.method?.toLowerCase() || "",
+    )
+  ) {
+    if (typeof document !== "undefined") {
+      const csrfCookie = getCookieValue("acx_csrf");
+      if (csrfCookie) {
+        config.headers["X-CSRF-Token"] = decodeURIComponent(csrfCookie);
+      }
     }
   }
   return config;
 });
-
-// Response interceptor to handle 401 Unauthorized
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config as typeof error.config & {
+      _retry?: boolean;
+    };
+
     if (error.response?.status === 401) {
-      // Clear token and redirect to login
-      if (typeof window !== 'undefined') {
-        document.cookie = 'authToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-        window.location.href = '/login';
+      if (typeof window !== "undefined") {
+        const isRefreshCall = String(originalRequest?.url || "").includes(
+          "/auth/refresh",
+        );
+        if (!isRefreshCall && !originalRequest?._retry) {
+          originalRequest._retry = true;
+          try {
+            await refreshAuth();
+            return apiClient(originalRequest);
+          } catch {
+            clearAuthCookies();
+            window.location.href = "/login";
+            return Promise.reject(error);
+          }
+        }
+        clearAuthCookies();
+        window.location.href = "/login";
       }
+    } else if (error.response?.status === 403) {
+      if (typeof window !== "undefined") toast.error("Permission denied.");
+    } else if (error.response?.status === 404) {
+      if (typeof window !== "undefined") toast.error("Resource not found.");
+    } else if (error.response?.status === 409) {
+      if (typeof window !== "undefined")
+        toast.error("Conflict: duplicate resource.");
+    } else if (error.response?.status >= 500) {
+      if (typeof window !== "undefined") toast.error("Server error.");
     }
     return Promise.reject(error);
-  }
+  },
 );

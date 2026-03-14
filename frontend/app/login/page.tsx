@@ -1,29 +1,21 @@
 "use client";
-
 import { Button } from "@/components/ui/button";
 import { Network } from "lucide-react";
-
 export default function LoginPage() {
-  const handleLogin = () => {
-    // In actual implementation, this would redirect to Neon Auth
-    document.cookie = "authToken=mock_jwt_token_for_mvp; path=/";
-    window.location.href = "/dashboard";
+  const handleGoogleLogin = () => {
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/google`;
   };
-
+  const handleGithubLogin = () => {
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/login/github`;
+  };
   return (
     <div className="min-h-screen bg-[#0F1117] flex relative overflow-hidden">
-      {/* Abstract Background Elements */}
       <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[#5B5DFF]/20 blur-[120px]" />
       <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[#00C2A8]/20 blur-[120px]" />
-      
-      {/* Grid Overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#242938_1px,transparent_1px),linear-gradient(to_bottom,#242938_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-20" />
-
       <div className="flex-1 flex flex-col justify-center items-center z-10 px-6">
         <div className="w-full max-w-md bg-[#161A23]/80 backdrop-blur-xl border border-[#242938] rounded-2xl p-8 shadow-[0_10px_40px_rgba(0,0,0,0.25)] relative overflow-hidden">
-          
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#5B5DFF] via-[#00C2A8] to-[#3A8DFF]" />
-          
           <div className="flex flex-col items-center mb-8">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-[#5B5DFF] to-[#00C2A8] flex items-center justify-center shadow-[0_0_20px_rgba(91,93,255,0.4)] mb-6">
               <Network className="text-white w-7 h-7" />
@@ -31,10 +23,9 @@ export default function LoginPage() {
             <h1 className="text-3xl font-bold text-[#E6EAF2] tracking-tight mb-2">Welcome to ApiCortex</h1>
             <p className="text-[#9AA3B2] text-center text-sm">Predict API failures before they happen and validate contracts in real-time.</p>
           </div>
-
           <div className="space-y-4">
             <Button 
-              onClick={handleLogin}
+              onClick={handleGoogleLogin}
               className="w-full h-12 bg-white text-black hover:bg-gray-100 flex items-center justify-center gap-3 transition-all rounded-xl font-semibold border border-transparent hover:border-[#242938]"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-5 h-5">
@@ -45,7 +36,15 @@ export default function LoginPage() {
               </svg>
               Sign in with Google
             </Button>
-            
+            <Button 
+              onClick={handleGithubLogin}
+              className="w-full h-12 bg-[#242938] text-white hover:bg-[#2D3344] flex items-center justify-center gap-3 transition-all rounded-xl font-semibold border border-transparent hover:border-gray-500"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+              </svg>
+              Sign in with GitHub
+            </Button>
             <p className="text-xs text-center text-[#9AA3B2] px-4">
               By clicking continue, you agree to our Terms of Service and Privacy Policy.
             </p>
