@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
@@ -24,7 +25,22 @@ class TelemetryEvent(BaseModel):
     schema_hash: str | None = None
     schema_version: str | None = None
 
-    @field_validator("org_id", "api_id", "endpoint", "method", mode="before")
+    @field_validator("org_id", "api_id", mode="before")
+    @classmethod
+    def _validate_uuid_format(cls, value: str) -> str:
+        if not isinstance(value, str):
+            raise ValueError("UUID field must be a string")
+        value = value.strip()
+        if not value:
+            raise ValueError("UUID field cannot be empty")
+        # Validate UUID format
+        try:
+            UUID(value)
+        except (ValueError, AttributeError):
+            raise ValueError(f"Invalid UUID format: {value}")
+        return value
+
+    @field_validator("endpoint", "method", mode="before")
     @classmethod
     def _trim_required_strings(cls, value: str) -> str:
         if not isinstance(value, str) or not value.strip():
