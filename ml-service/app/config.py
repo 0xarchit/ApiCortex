@@ -30,6 +30,13 @@ class Settings(BaseModel):
 
     consumer_max_poll_interval_ms: int = 300000
     consumer_session_timeout_ms: int = 45000
+    kafka_alert_delivery_timeout_seconds: float = 5.0
+    processing_failure_max_retries: int = 3
+    processing_failure_dlq_topic: str | None = None
+    shutdown_timeout_seconds: float = 15.0
+    db_pool_min_connections: int = 1
+    db_pool_max_connections: int = 8
+    db_write_page_size: int = 500
 
     @field_validator("kafka_service_uri", "timescale_database", mode="before")
     @classmethod
@@ -70,11 +77,27 @@ class Settings(BaseModel):
             raise ValueError("alert_threshold must be within [0.0, 1.0]")
         return value
 
+    @field_validator("kafka_alert_delivery_timeout_seconds", "shutdown_timeout_seconds")
+    @classmethod
+    def _positive_float(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("value must be greater than 0")
+        return value
+
+    @field_validator("processing_failure_max_retries", "db_pool_min_connections", "db_pool_max_connections", "db_write_page_size")
+    @classmethod
+    def _positive_int(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("value must be greater than 0")
+        return value
+
     @model_validator(mode="after")
     def _validate_kafka_tls_material(self) -> "Settings":
         values = [self.kafka_ca_cert, self.kafka_service_cert, self.kafka_service_key]
         if any(values) and not all(values):
             raise ValueError("KAFKA_CA_CERT, KAFKA_SERVICE_CERT, and KAFKA_SERVICE_KEY must all be provided together")
+        if self.db_pool_min_connections > self.db_pool_max_connections:
+            raise ValueError("db_pool_min_connections must be <= db_pool_max_connections")
         return self
 
     @property
@@ -156,6 +179,13 @@ def get_settings() -> Settings:
         "consumer_max_poll_interval_ms": int(os.getenv("KAFKA_MAX_POLL_INTERVAL_MS", "300000")),
         "consumer_session_timeout_ms": int(os.getenv("KAFKA_SESSION_TIMEOUT_MS", "45000")),
         "shap_top_k": int(os.getenv("SHAP_TOP_K", "5")),
+        "kafka_alert_delivery_timeout_seconds": float(os.getenv("KAFKA_ALERT_DELIVERY_TIMEOUT_SECONDS", "5.0")),
+        "processing_failure_max_retries": int(os.getenv("PROCESSING_FAILURE_MAX_RETRIES", "3")),
+        "processing_failure_dlq_topic": os.getenv("PROCESSING_FAILURE_DLQ_TOPIC"),
+        "shutdown_timeout_seconds": float(os.getenv("SHUTDOWN_TIMEOUT_SECONDS", "15.0")),
+        "db_pool_min_connections": int(os.getenv("DB_POOL_MIN_CONNECTIONS", "1")),
+        "db_pool_max_connections": int(os.getenv("DB_POOL_MAX_CONNECTIONS", "8")),
+        "db_write_page_size": int(os.getenv("DB_WRITE_PAGE_SIZE", "500")),
     }
     try:
         return Settings.model_validate(data)

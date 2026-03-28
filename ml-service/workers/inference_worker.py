@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import signal
 import time
-from dataclasses import dataclass, field
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Callable
 
 from confluent_kafka import Message
@@ -37,7 +40,6 @@ def configure_logging(level: str) -> logging.Logger:
     logger = logging.getLogger("apicortex.ml-worker")
     logger.setLevel(level)
     logger.handlers.clear()
-
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())
     logger.addHandler(handler)
@@ -49,38 +51,26 @@ def configure_logging(level: str) -> logging.Logger:
 class WorkerMetrics:
     batches_processed: int = 0
     events_processed: int = 0
-    predictions_written: int = 0
-    inference_errors: int = 0
     invalid_events: int = 0
-    alert_publish_failures: int = 0
+    payload_corruption: int = 0
+    telemetry_written: int = 0
+    telemetry_write_failures: int = 0
+    predictions_written: int = 0
     db_write_failures: int = 0
+    alert_publish_failures: int = 0
+    alert_delivery_errors: int = 0
+    inference_errors: int = 0
     retries: int = 0
     dlq_messages: int = 0
+    processing_dlq_messages: int = 0
 
 
 @dataclass
 class RetryConfig:
-    """Configuration for exponential backoff retry logic."""
     max_retries: int = 3
     initial_backoff_seconds: float = 0.1
     max_backoff_seconds: float = 30.0
     backoff_multiplier: float = 2.0
-
-
-class AlertDeliveryTracker:
-    """Tracks alert delivery confirmations."""
-    def __init__(self) -> None:
-        self.pending_alerts: dict[int, dict] = {}
-        self.delivery_errors: list[str] = []
-        self._lock = asyncio.Lock()
-
-    async def on_delivery(self, err, msg) -> None:
-        """Callback invoked on alert delivery confirmation."""
-        async with self._lock:
-            if err:
-                self.delivery_errors.append(str(err))
-            # Successfully delivered
-
 
 
 class InferenceWorker:
@@ -102,16 +92,27 @@ class InferenceWorker:
         self.writer = TimescaleWriter(settings)
 
         self.metrics = WorkerMetrics()
-        self.retry_config = RetryConfig()
-        self.alert_tracker = AlertDeliveryTracker()
+        self.retry_config = RetryConfig(max_retries=settings.processing_failure_max_retries)
         self._shutdown = asyncio.Event()
+        self._db_executor = ThreadPoolExecutor(max_workers=max(1, settings.db_pool_max_connections))
+        self._db_semaphore = asyncio.Semaphore(max(1, settings.db_pool_max_connections))
+        self._message_failures: dict[tuple[str, int, int], int] = {}
+        self._model_hash = self._compute_model_hash(settings.model_path)
+
+    @staticmethod
+    def _compute_model_hash(model_path: Path) -> str:
+        sha = hashlib.sha256()
+        with model_path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(65536), b""):
+                sha.update(chunk)
+        return sha.hexdigest()
 
     def request_shutdown(self) -> None:
         self._shutdown.set()
 
     async def _validate_uuids(self, org_id: str, api_id: str) -> bool:
-        """Validate that org_id and api_id are valid UUIDs."""
         import uuid as uuid_module
+
         try:
             uuid_module.UUID(org_id)
             uuid_module.UUID(api_id)
@@ -119,13 +120,7 @@ class InferenceWorker:
         except (ValueError, AttributeError):
             return False
 
-    async def _retry_with_backoff(
-        self,
-        func: Callable,
-        *args,
-        **kwargs
-    ) -> Any:
-        """Retry async function with exponential backoff."""
+    async def _retry_with_backoff(self, func: Callable, *args, **kwargs) -> Any:
         backoff = self.retry_config.initial_backoff_seconds
         last_error = None
 
@@ -136,15 +131,15 @@ class InferenceWorker:
                 last_error = exc
                 if attempt < self.retry_config.max_retries:
                     self.metrics.retries += 1
-                    await asyncio.sleep(min(backoff, self.retry_config.max_backoff_seconds))
+                    wait_seconds = min(backoff, self.retry_config.max_backoff_seconds)
+                    await asyncio.sleep(wait_seconds)
                     backoff *= self.retry_config.backoff_multiplier
                     self.logger.warning(
                         f"Retry attempt {attempt + 1}/{self.retry_config.max_retries}",
-                        extra={"extra": {"error": str(exc), "next_backoff_seconds": min(backoff, self.retry_config.max_backoff_seconds)}}
+                        extra={"extra": {"error": str(exc), "next_backoff_seconds": wait_seconds}},
                     )
 
         raise last_error or RuntimeError("Retry exhausted")
-
 
     async def run(self) -> None:
         self.logger.info("ML inference worker started")
@@ -154,13 +149,8 @@ class InferenceWorker:
                 message = await asyncio.to_thread(self.consumer.poll_message, self.settings.kafka_poll_timeout_seconds)
             except RetryableKafkaError as exc:
                 self.logger.warning(
-                    "Kafka topic unavailable, waiting for topic creation",
-                    extra={
-                        "extra": {
-                            "error": str(exc),
-                            "topic": self.settings.kafka_topic_raw,
-                        }
-                    },
+                    "Kafka topic unavailable",
+                    extra={"extra": {"error": str(exc), "topic": self.settings.kafka_topic_raw}},
                 )
                 await asyncio.sleep(max(1.0, self.settings.kafka_poll_timeout_seconds))
                 continue
@@ -168,12 +158,7 @@ class InferenceWorker:
                 self.metrics.inference_errors += 1
                 self.logger.exception(
                     "Kafka poll failed",
-                    extra={
-                        "extra": {
-                            "error": str(exc),
-                            "inference_errors": self.metrics.inference_errors,
-                        }
-                    },
+                    extra={"extra": {"error": str(exc), "inference_errors": self.metrics.inference_errors}},
                 )
                 await asyncio.sleep(max(1.0, self.settings.kafka_poll_timeout_seconds))
                 continue
@@ -183,10 +168,11 @@ class InferenceWorker:
 
             try:
                 await self._handle_message(message)
+                self._message_failures.pop((message.topic(), message.partition(), message.offset()), None)
             except Exception as exc:
                 self.metrics.inference_errors += 1
                 self.logger.exception(
-                    "Failed to process telemetry batch - will NOT commit offset",
+                    "Failed to process telemetry batch",
                     extra={
                         "extra": {
                             "error": str(exc),
@@ -197,20 +183,43 @@ class InferenceWorker:
                         }
                     },
                 )
-                # Do NOT commit offset on failure - message will be reprocessed
+                await self._handle_processing_failure(message, str(exc))
 
         await self._shutdown_cleanup()
 
+    async def _handle_processing_failure(self, message: Message, reason: str) -> None:
+        key = (message.topic(), message.partition(), message.offset())
+        attempts = self._message_failures.get(key, 0) + 1
+        self._message_failures[key] = attempts
+
+        if attempts <= self.settings.processing_failure_max_retries:
+            return
+
+        try:
+            await asyncio.to_thread(self.consumer.publish_processing_failure, message, reason)
+            self.metrics.processing_dlq_messages += 1
+            await asyncio.to_thread(self.consumer.commit_message, message)
+            self._message_failures.pop(key, None)
+        except Exception as exc:
+            self.logger.exception(
+                "Failed to publish processing failure to DLQ",
+                extra={
+                    "extra": {
+                        "error": str(exc),
+                        "topic": message.topic(),
+                        "partition": message.partition(),
+                        "offset": message.offset(),
+                    }
+                },
+            )
+
     async def _handle_message(self, message: Message) -> None:
-        """Process a single Kafka message with proper error handling and commit semantics."""
-        consume_started = time.perf_counter()
+        started = time.perf_counter()
         kafka_lag = await asyncio.to_thread(self.consumer.lag_for_message, message)
 
-        # Decode message and handle per-event validation failures
         decode_result = await asyncio.to_thread(self.consumer.decode_message, message)
-        valid_events = decode_result.valid_events
+        self.metrics.payload_corruption += decode_result.payload_corruption_count
 
-        # Publish invalid events to DLQ
         for invalid in decode_result.invalid_payloads:
             self.metrics.invalid_events += 1
             self.metrics.dlq_messages += 1
@@ -222,39 +231,42 @@ class InferenceWorker:
                 message.offset(),
             )
 
-        if not valid_events:
-            # No valid events, but we've logged invalids to DLQ
-            # Commit to move past this message
+        if not decode_result.valid_events:
             await asyncio.to_thread(self.consumer.commit_message, message)
             return
 
-        # Validate UUIDs and filter out invalid events before processing
-        filtered_events: list = []
-        for event in valid_events:
-            if not await self._validate_uuids(event.org_id, event.api_id):
-                self.metrics.invalid_events += 1
-                self.metrics.dlq_messages += 1
-                await asyncio.to_thread(
-                    self.consumer.publish_invalid_payload,
-                    {
-                        "timestamp": event.timestamp.isoformat(),
-                        "org_id": event.org_id,
-                        "api_id": event.api_id,
-                        "endpoint": event.endpoint,
-                    },
-                    f"Invalid UUID format: org_id={event.org_id}, api_id={event.api_id}",
-                    message.topic(),
-                    message.offset(),
-                )
-            else:
+        filtered_events = []
+        for event in decode_result.valid_events:
+            if await self._validate_uuids(event.org_id, event.api_id):
                 filtered_events.append(event)
+                continue
+            self.metrics.invalid_events += 1
+            self.metrics.dlq_messages += 1
+            await asyncio.to_thread(
+                self.consumer.publish_invalid_payload,
+                {
+                    "timestamp": event.timestamp.isoformat(),
+                    "org_id": event.org_id,
+                    "api_id": event.api_id,
+                    "endpoint": event.endpoint,
+                    "method": event.method,
+                },
+                f"Invalid UUID format: org_id={event.org_id}, api_id={event.api_id}",
+                message.topic(),
+                message.offset(),
+            )
 
         if not filtered_events:
-            # All events were invalid
             await asyncio.to_thread(self.consumer.commit_message, message)
             return
 
-        # Generate features and predictions
+        try:
+            await self._retry_with_backoff(self._write_telemetry_async, filtered_events)
+            self.metrics.telemetry_written += len(filtered_events)
+        except Exception as exc:
+            self.metrics.telemetry_write_failures += 1
+            raise RuntimeError(f"telemetry write failed: {exc}") from exc
+
         feature_rows = self.feature_engineer.ingest(filtered_events)
         prediction_records: list[PredictionRecord] = []
         alerts_to_publish: list[dict[str, Any]] = []
@@ -272,54 +284,55 @@ class InferenceWorker:
                     prediction=result.prediction,
                     confidence=result.confidence,
                     top_features=result.top_features,
+                    model_hash=self._model_hash,
                     is_warmed_up=feature_row.is_warmed_up,
                 )
             )
 
             if result.risk_score >= self.settings.alert_threshold:
-                alerts_to_publish.append({
-                    "org_id": feature_row.org_id,
-                    "api_id": feature_row.api_id,
-                    "endpoint": feature_row.endpoint,
-                    "method": feature_row.method,
-                    "risk_score": result.risk_score,
-                    "prediction": result.prediction,
-                    "severity": "high",
-                    "timestamp": feature_row.time.isoformat(),
-                })
+                alerts_to_publish.append(
+                    {
+                        "org_id": feature_row.org_id,
+                        "api_id": feature_row.api_id,
+                        "endpoint": feature_row.endpoint,
+                        "method": feature_row.method,
+                        "risk_score": result.risk_score,
+                        "prediction": result.prediction,
+                        "severity": "high",
+                        "timestamp": feature_row.time.isoformat(),
+                    }
+                )
 
-        # Write predictions to Timescale (with retry)
-        try:
-            await self._retry_with_backoff(
-                self._write_predictions_async,
-                prediction_records
-            )
-        except Exception as exc:
-            self.metrics.db_write_failures += 1
-            self.logger.exception(
-                "Failed to write predictions to Timescale - offset will NOT be committed",
-                extra={"extra": {"error": str(exc), "records": len(prediction_records)}}
-            )
-            raise
+        if prediction_records:
+            try:
+                await self._retry_with_backoff(self._write_predictions_async, prediction_records)
+            except Exception as exc:
+                self.metrics.db_write_failures += 1
+                raise RuntimeError(f"prediction write failed: {exc}") from exc
 
-        # Publish alerts (with retry, but non-blocking failure)
         for alert in alerts_to_publish:
             try:
-                await self._retry_with_backoff(
-                    self._publish_alert_async,
-                    alert
-                )
+                await self._retry_with_backoff(self._publish_alert_async, alert)
             except Exception as exc:
                 self.metrics.alert_publish_failures += 1
-                self.logger.warning(
-                    "Failed to publish alert - proceeding with offset commit (alert will be missed)",
-                    extra={"extra": {"error": str(exc), "alert_org_id": alert.get("org_id")}}
-                )
+                raise RuntimeError(f"alert publish failed: {exc}") from exc
 
-        # Only commit offset after BOTH write_predictions AND all alerts succeed
+        if alerts_to_publish:
+            delivered = await asyncio.to_thread(
+                self.consumer.wait_for_pending_alerts,
+                self.settings.kafka_alert_delivery_timeout_seconds,
+            )
+            delivery_errors = await asyncio.to_thread(self.consumer.get_and_clear_delivery_errors)
+            if (not delivered) or delivery_errors:
+                self.metrics.alert_delivery_errors += len(delivery_errors) + (0 if delivered else 1)
+                reason = "alert delivery confirmation failed"
+                if delivery_errors:
+                    reason = f"alert delivery confirmation failed: {delivery_errors[0]}"
+                raise RuntimeError(reason)
+
         await asyncio.to_thread(self.consumer.commit_message, message)
 
-        duration_ms = round((time.perf_counter() - consume_started) * 1000, 2)
+        duration_ms = round((time.perf_counter() - started) * 1000, 2)
         self.metrics.batches_processed += 1
         self.metrics.events_processed += len(filtered_events)
         self.metrics.predictions_written += len(prediction_records)
@@ -329,9 +342,11 @@ class InferenceWorker:
             extra={
                 "extra": {
                     "events_processed": len(filtered_events),
+                    "telemetry_written": len(filtered_events),
                     "predictions_written": len(prediction_records),
                     "alerts_published": len(alerts_to_publish),
                     "invalid_events": len(decode_result.invalid_payloads),
+                    "payload_corruption": decode_result.payload_corruption_count,
                     "prediction_latency_ms": duration_ms,
                     "kafka_lag": kafka_lag,
                     "totals": {
@@ -341,24 +356,61 @@ class InferenceWorker:
                         "inference_errors": self.metrics.inference_errors,
                         "invalid_events": self.metrics.invalid_events,
                         "dlq_messages": self.metrics.dlq_messages,
+                        "processing_dlq_messages": self.metrics.processing_dlq_messages,
                     },
                 }
             },
         )
 
+    async def _run_db_call(self, fn: Callable, *args) -> None:
+        async with self._db_semaphore:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(self._db_executor, fn, *args)
+
+    async def _write_telemetry_async(self, events) -> None:
+        await self._run_db_call(self.writer.write_telemetry, events)
+
     async def _write_predictions_async(self, records: list[PredictionRecord]) -> None:
-        """Async wrapper for writing predictions."""
-        await asyncio.to_thread(self.writer.write_predictions, records)
+        await self._run_db_call(self.writer.write_predictions, records)
 
     async def _publish_alert_async(self, alert: dict[str, Any]) -> None:
-        """Async wrapper for publishing alerts."""
         await asyncio.to_thread(self.consumer.publish_alert, alert)
 
     async def _shutdown_cleanup(self) -> None:
         self.logger.info("Shutting down ML inference worker")
-        await asyncio.to_thread(self.consumer.flush_producer)
-        await asyncio.to_thread(self.writer.close)
-        await asyncio.to_thread(self.consumer.close)
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(self.consumer.wait_for_pending_alerts, self.settings.kafka_alert_delivery_timeout_seconds),
+                timeout=self.settings.shutdown_timeout_seconds,
+            )
+        except Exception:
+            pass
+
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(self.consumer.flush_producer, self.settings.kafka_alert_delivery_timeout_seconds),
+                timeout=self.settings.shutdown_timeout_seconds,
+            )
+        except Exception:
+            pass
+
+        try:
+            await asyncio.wait_for(
+                self._run_db_call(self.writer.close),
+                timeout=self.settings.shutdown_timeout_seconds,
+            )
+        except Exception:
+            pass
+
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(self.consumer.close),
+                timeout=self.settings.shutdown_timeout_seconds,
+            )
+        except Exception:
+            pass
+
+        self._db_executor.shutdown(wait=False, cancel_futures=True)
 
 
 def install_signal_handlers(worker: InferenceWorker) -> None:
@@ -367,5 +419,4 @@ def install_signal_handlers(worker: InferenceWorker) -> None:
         try:
             loop.add_signal_handler(sig, worker.request_shutdown)
         except NotImplementedError:
-            
             signal.signal(sig, lambda _signo, _frame: worker.request_shutdown())

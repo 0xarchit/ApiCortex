@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
-import psycopg2
 from psycopg2.extras import Json, execute_batch
+from psycopg2.pool import ThreadedConnectionPool
 
 from app.config import Settings
+from app.schemas.telemetry_event import TelemetryEvent
 
 
 @dataclass
@@ -29,123 +30,289 @@ class PredictionRecord:
 
 class TimescaleWriter:
     def __init__(self, settings: Settings) -> None:
-        self._conn = psycopg2.connect(settings.timescale_database)
-        self._conn.autocommit = False
+        self._pool = ThreadedConnectionPool(
+            minconn=settings.db_pool_min_connections,
+            maxconn=settings.db_pool_max_connections,
+            dsn=settings.timescale_database,
+        )
+        self._page_size = settings.db_write_page_size
         self._ensure_schema()
 
-    def _ensure_schema(self) -> None:
-        with self._conn.cursor() as cursor:
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS api_failure_predictions (
-                    time TIMESTAMPTZ NOT NULL,
-                    org_id UUID NOT NULL,
-                    api_id UUID NOT NULL,
-                    endpoint TEXT NOT NULL,
-                    method TEXT NOT NULL DEFAULT 'GET',
-                    risk_score DOUBLE PRECISION NOT NULL,
-                    prediction TEXT NOT NULL,
-                    confidence DOUBLE PRECISION NOT NULL,
-                    top_features JSONB NOT NULL DEFAULT '[]'::jsonb,
-                    model_version TEXT NOT NULL DEFAULT '1.0',
-                    feature_schema_version TEXT NOT NULL DEFAULT '1.0',
-                    model_hash TEXT DEFAULT '',
-                    is_warmed_up BOOLEAN DEFAULT false
-                );
-                """
-            )
-            cursor.execute(
-                """
-                SELECT create_hypertable(
-                    'api_failure_predictions',
-                    'time',
-                    if_not_exists => TRUE,
-                    migrate_data => TRUE
-                );
-                """
-            )
-            
-            cursor.execute(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_api_failure_predictions_idempotent
-                ON api_failure_predictions (org_id, api_id, endpoint, method, time_bucket('1 minute', time));
-                """
-            )
-            
-            cursor.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_api_failure_predictions_lookup
-                ON api_failure_predictions (org_id, api_id, endpoint, time DESC);
-                """
-            )
-        self._conn.commit()
+    def _get_conn(self):
+        conn = self._pool.getconn()
+        conn.autocommit = False
+        return conn
 
-    def _bucket_time(self, ts: datetime) -> datetime:
-        """Bucket timestamp to nearest minute for idempotency."""
+    def _put_conn(self, conn) -> None:
+        self._pool.putconn(conn)
+
+    def _ensure_schema(self) -> None:
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS api_telemetry (
+                        time TIMESTAMPTZ NOT NULL,
+                        org_id UUID NOT NULL,
+                        api_id UUID NOT NULL,
+                        endpoint TEXT NOT NULL,
+                        method TEXT NOT NULL,
+                        status INTEGER NOT NULL,
+                        latency_ms INTEGER NOT NULL,
+                        request_size INTEGER NOT NULL DEFAULT 0,
+                        response_size INTEGER NOT NULL DEFAULT 0,
+                        schema_hash TEXT,
+                        schema_version TEXT
+                    );
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE api_telemetry
+                    ADD COLUMN IF NOT EXISTS request_size INTEGER NOT NULL DEFAULT 0;
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE api_telemetry
+                    ADD COLUMN IF NOT EXISTS response_size INTEGER NOT NULL DEFAULT 0;
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE api_telemetry
+                    ADD COLUMN IF NOT EXISTS schema_hash TEXT;
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE api_telemetry
+                    ADD COLUMN IF NOT EXISTS schema_version TEXT;
+                    """
+                )
+                cursor.execute(
+                    """
+                    SELECT create_hypertable(
+                        'api_telemetry',
+                        'time',
+                        if_not_exists => TRUE,
+                        migrate_data => TRUE
+                    );
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_api_telemetry_org_time
+                    ON api_telemetry (org_id, time DESC);
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS api_failure_predictions (
+                        time TIMESTAMPTZ NOT NULL,
+                        org_id UUID NOT NULL,
+                        api_id UUID NOT NULL,
+                        endpoint TEXT NOT NULL,
+                        method TEXT NOT NULL DEFAULT 'GET',
+                        risk_score DOUBLE PRECISION NOT NULL,
+                        prediction TEXT NOT NULL,
+                        confidence DOUBLE PRECISION NOT NULL,
+                        top_features JSONB NOT NULL DEFAULT '[]'::jsonb,
+                        model_version TEXT NOT NULL DEFAULT '1.0',
+                        feature_schema_version TEXT NOT NULL DEFAULT '1.0',
+                        model_hash TEXT DEFAULT '',
+                        is_warmed_up BOOLEAN DEFAULT false
+                    );
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE api_failure_predictions
+                    ADD COLUMN IF NOT EXISTS method TEXT NOT NULL DEFAULT 'GET';
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE api_failure_predictions
+                    ADD COLUMN IF NOT EXISTS top_features JSONB NOT NULL DEFAULT '[]'::jsonb;
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE api_failure_predictions
+                    ADD COLUMN IF NOT EXISTS model_version TEXT NOT NULL DEFAULT '1.0';
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE api_failure_predictions
+                    ADD COLUMN IF NOT EXISTS feature_schema_version TEXT NOT NULL DEFAULT '1.0';
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE api_failure_predictions
+                    ADD COLUMN IF NOT EXISTS model_hash TEXT DEFAULT '';
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE api_failure_predictions
+                    ADD COLUMN IF NOT EXISTS is_warmed_up BOOLEAN DEFAULT false;
+                    """
+                )
+                cursor.execute(
+                    """
+                    SELECT create_hypertable(
+                        'api_failure_predictions',
+                        'time',
+                        if_not_exists => TRUE,
+                        migrate_data => TRUE
+                    );
+                    """
+                )
+                cursor.execute(
+                    """
+                    DROP INDEX IF EXISTS idx_api_failure_predictions_idempotent;
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_api_failure_predictions_idempotent
+                    ON api_failure_predictions (org_id, api_id, endpoint, method, time);
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_api_failure_predictions_lookup
+                    ON api_failure_predictions (org_id, api_id, endpoint, time DESC);
+                    """
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            self._put_conn(conn)
+
+    @staticmethod
+    def _bucket_time(ts: datetime) -> datetime:
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=UTC)
-        # Truncate to minute boundary
         return ts.replace(second=0, microsecond=0)
 
+    def write_telemetry(self, events: list[TelemetryEvent]) -> None:
+        if not events:
+            return
+
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cursor:
+                execute_batch(
+                    cursor,
+                    """
+                    INSERT INTO api_telemetry (
+                        time,
+                        org_id,
+                        api_id,
+                        endpoint,
+                        method,
+                        status,
+                        latency_ms,
+                        request_size,
+                        response_size,
+                        schema_hash,
+                        schema_version
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    """,
+                    [
+                        (
+                            event.timestamp,
+                            event.org_id,
+                            event.api_id,
+                            event.endpoint,
+                            event.method,
+                            event.status,
+                            event.latency_ms,
+                            event.request_size_bytes,
+                            event.response_size_bytes,
+                            event.schema_hash,
+                            event.schema_version,
+                        )
+                        for event in events
+                    ],
+                    page_size=self._page_size,
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            self._put_conn(conn)
 
     def write_predictions(self, records: list[PredictionRecord]) -> None:
         if not records:
             return
 
-        with self._conn.cursor() as cursor:
-            # Use UPSERT with ON CONFLICT to ensure idempotency
-            # Conflict key is (org_id, api_id, endpoint, method, time_bucket)
-            execute_batch(
-                cursor,
-                """
-                INSERT INTO api_failure_predictions (
-                    time,
-                    org_id,
-                    api_id,
-                    endpoint,
-                    method,
-                    risk_score,
-                    prediction,
-                    confidence,
-                    top_features,
-                    model_version,
-                    feature_schema_version,
-                    model_hash,
-                    is_warmed_up
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (org_id, api_id, endpoint, method, time_bucket('1 minute', time))
-                DO UPDATE SET
-                    risk_score = GREATEST(EXCLUDED.risk_score, api_failure_predictions.risk_score),
-                    prediction = EXCLUDED.prediction,
-                    confidence = EXCLUDED.confidence,
-                    top_features = EXCLUDED.top_features,
-                    model_version = EXCLUDED.model_version,
-                    feature_schema_version = EXCLUDED.feature_schema_version,
-                    model_hash = EXCLUDED.model_hash,
-                    is_warmed_up = EXCLUDED.is_warmed_up;
-                """,
-                [
-                    (
-                        self._bucket_time(record.time),
-                        record.org_id,
-                        record.api_id,
-                        record.endpoint,
-                        record.method,
-                        record.risk_score,
-                        record.prediction,
-                        record.confidence,
-                        Json(record.top_features),
-                        record.model_version,
-                        record.feature_schema_version,
-                        record.model_hash,
-                        record.is_warmed_up,
-                    )
-                    for record in records
-                ],
-                page_size=500,
-            )
-        self._conn.commit()
-
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cursor:
+                execute_batch(
+                    cursor,
+                    """
+                    INSERT INTO api_failure_predictions (
+                        time,
+                        org_id,
+                        api_id,
+                        endpoint,
+                        method,
+                        risk_score,
+                        prediction,
+                        confidence,
+                        top_features,
+                        model_version,
+                        feature_schema_version,
+                        model_hash,
+                        is_warmed_up
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (org_id, api_id, endpoint, method, time)
+                    DO UPDATE SET
+                        risk_score = GREATEST(EXCLUDED.risk_score, api_failure_predictions.risk_score),
+                        prediction = EXCLUDED.prediction,
+                        confidence = EXCLUDED.confidence,
+                        top_features = EXCLUDED.top_features,
+                        model_version = EXCLUDED.model_version,
+                        feature_schema_version = EXCLUDED.feature_schema_version,
+                        model_hash = EXCLUDED.model_hash,
+                        is_warmed_up = EXCLUDED.is_warmed_up;
+                    """,
+                    [
+                        (
+                            self._bucket_time(record.time),
+                            record.org_id,
+                            record.api_id,
+                            record.endpoint,
+                            record.method,
+                            record.risk_score,
+                            record.prediction,
+                            record.confidence,
+                            Json(record.top_features),
+                            record.model_version,
+                            record.feature_schema_version,
+                            record.model_hash,
+                            record.is_warmed_up,
+                        )
+                        for record in records
+                    ],
+                    page_size=self._page_size,
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            self._put_conn(conn)
 
     def close(self) -> None:
-        self._conn.close()
+        self._pool.closeall()

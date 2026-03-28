@@ -4,7 +4,9 @@ import asyncio
 import gzip
 import json
 import logging
+import base64
 from dataclasses import dataclass
+from threading import Lock
 from typing import Any
 
 from confluent_kafka import Consumer, KafkaError, Message, Producer, TopicPartition
@@ -19,9 +21,9 @@ class RetryableKafkaError(RuntimeError):
 
 @dataclass
 class DecodeResult:
-    """Result of decoding a Kafka message."""
     valid_events: list[TelemetryEvent]
-    invalid_payloads: list[dict[str, Any]]  # {payload, reason}
+    invalid_payloads: list[dict[str, Any]]
+    payload_corruption_count: int
     
 
 class KafkaBatchConsumer:
@@ -33,16 +35,16 @@ class KafkaBatchConsumer:
         self._logger = logging.getLogger(__name__)
         self._delivery_errors: list[str] = []
         self._pending_deliveries: int = 0
+        self._delivery_lock = Lock()
 
     def _on_alert_delivery(self, err, msg) -> None:
-        """Callback for alert delivery confirmation."""
-        self._pending_deliveries -= 1
+        with self._delivery_lock:
+            self._pending_deliveries = max(0, self._pending_deliveries - 1)
         if err:
             error_msg = f"Alert delivery failed: {err}"
-            self._delivery_errors.append(error_msg)
+            with self._delivery_lock:
+                self._delivery_errors.append(error_msg)
             self._logger.error(error_msg)
-        else:
-            self._logger.debug(f"Alert delivered to {msg.topic()}:{msg.partition()} at offset {msg.offset()}")
 
     def poll_message(self, timeout_seconds: float) -> Message | None:
         message = self._consumer.poll(timeout_seconds)
@@ -63,7 +65,7 @@ class KafkaBatchConsumer:
     def decode_message(self, message: Message) -> DecodeResult:
         payload = message.value()
         if payload is None:
-            return DecodeResult(valid_events=[], invalid_payloads=[])
+            return DecodeResult(valid_events=[], invalid_payloads=[], payload_corruption_count=0)
 
         try:
             payload = self._decompress_if_needed(payload, message.headers())
@@ -74,6 +76,7 @@ class KafkaBatchConsumer:
                     "original_payload": None,
                     "reason": f"Decompression failed: {exc}",
                 }],
+                payload_corruption_count=1,
             )
 
         try:
@@ -85,6 +88,7 @@ class KafkaBatchConsumer:
                     "original_payload": None,
                     "reason": f"JSON decode failed: {exc}",
                 }],
+                payload_corruption_count=1,
             )
 
         if not isinstance(data, list):
@@ -94,6 +98,7 @@ class KafkaBatchConsumer:
                     "original_payload": data,
                     "reason": "Expected JSON array, got single object or other type",
                 }],
+                payload_corruption_count=1,
             )
 
         valid_events: list[TelemetryEvent] = []
@@ -109,7 +114,7 @@ class KafkaBatchConsumer:
                     "reason": str(exc),
                 })
 
-        return DecodeResult(valid_events=valid_events, invalid_payloads=invalid_payloads)
+        return DecodeResult(valid_events=valid_events, invalid_payloads=invalid_payloads, payload_corruption_count=0)
 
     @staticmethod
     def _decompress_if_needed(payload: bytes, headers: list[tuple[str, bytes]] | None) -> bytes:
@@ -147,49 +152,56 @@ class KafkaBatchConsumer:
         self._consumer.commit(message=message, asynchronous=False)
 
     def publish_alert(self, alert: dict[str, Any], callback=None) -> None:
-        """Publish alert to Kafka with delivery confirmation callback."""
         payload = json.dumps(alert, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
         delivery_callback = callback if callback is not None else self._on_alert_delivery
-        
-        self._pending_deliveries += 1
+        with self._delivery_lock:
+            self._pending_deliveries += 1
         try:
             self._producer.produce(
                 topic=self._settings.kafka_topic_alerts,
                 value=payload,
-                headers={"content-type": "application/json", "schema": "alerts.failure-risk.v1"},
+                headers=[("content-type", "application/json"), ("schema", "alerts.failure-risk.v1")],
                 on_delivery=delivery_callback,
             )
-            # Poll to trigger delivery callbacks
             self._producer.poll(0)
         except Exception as exc:
-            self._pending_deliveries -= 1
+            with self._delivery_lock:
+                self._pending_deliveries = max(0, self._pending_deliveries - 1)
             error_msg = f"Failed to produce alert: {exc}"
-            self._delivery_errors.append(error_msg)
+            with self._delivery_lock:
+                self._delivery_errors.append(error_msg)
             self._logger.error(error_msg)
             raise
 
     def wait_for_pending_alerts(self, timeout_seconds: float = 5.0) -> bool:
-        """Wait for all pending alert deliveries with timeout."""
         import time
         start_time = time.time()
-        while self._pending_deliveries > 0 and (time.time() - start_time) < timeout_seconds:
+        while (time.time() - start_time) < timeout_seconds:
+            with self._delivery_lock:
+                pending = self._pending_deliveries
+            if pending <= 0:
+                return True
             self._producer.poll(0.1)
-        
-        if self._pending_deliveries > 0:
+        with self._delivery_lock:
+            pending = self._pending_deliveries
+        if pending > 0:
             self._logger.warning(
-                f"Timeout waiting for pending alerts: {self._pending_deliveries} still pending"
+                f"Timeout waiting for pending alerts: {pending} still pending"
             )
             return False
         return True
 
     def get_and_clear_delivery_errors(self) -> list[str]:
-        """Get accumulated delivery errors and clear the list."""
-        errors = self._delivery_errors.copy()
-        self._delivery_errors.clear()
+        with self._delivery_lock:
+            errors = self._delivery_errors.copy()
+            self._delivery_errors.clear()
         return errors
 
+    def pending_deliveries(self) -> int:
+        with self._delivery_lock:
+            return self._pending_deliveries
+
     def publish_invalid_payload(self, original_payload: Any, reason: str, source_topic: str, source_offset: int) -> None:
-        """Publish invalid payload to DLQ for investigation."""
         dlq_topic = f"{source_topic}.dlq"
         dlq_message = {
             "source_topic": source_topic,
@@ -202,7 +214,7 @@ class KafkaBatchConsumer:
             self._producer.produce(
                 topic=dlq_topic,
                 value=payload,
-                headers={"content-type": "application/json", "schema": "dlq.invalid-payload.v1"},
+                headers=[("content-type", "application/json"), ("schema", "dlq.invalid-payload.v1")],
             )
             self._producer.poll(0)
         except Exception as exc:
@@ -211,9 +223,27 @@ class KafkaBatchConsumer:
                 extra={"extra": {"dlq_topic": dlq_topic, "reason": str(exc)}}
             )
 
+    def publish_processing_failure(self, message: Message, reason: str) -> None:
+        topic = self._settings.processing_failure_dlq_topic or f"{message.topic()}.processing-failure.dlq"
+        raw_payload = message.value() or b""
+        encoded_payload = base64.b64encode(raw_payload).decode("ascii")
+        payload = {
+            "source_topic": message.topic(),
+            "source_partition": message.partition(),
+            "source_offset": message.offset(),
+            "failure_reason": reason,
+            "payload_base64": encoded_payload,
+        }
+        body = json.dumps(payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+        self._producer.produce(
+            topic=topic,
+            value=body,
+            headers=[("content-type", "application/json"), ("schema", "dlq.processing-failure.v1")],
+        )
+        self._producer.poll(0)
+
     def flush_producer(self, timeout_seconds: float = 5.0) -> None:
-        """Flush pending producer messages."""
-        remaining = self._producer.flush(int(timeout_seconds * 1000))
+        remaining = self._producer.flush(timeout_seconds)
         if remaining > 0:
             self._logger.warning(
                 "Producer flush timeout: messages still in queue",
@@ -221,25 +251,25 @@ class KafkaBatchConsumer:
             )
 
     def close(self) -> None:
-        """Close producer and consumer connections."""
-        # Wait for pending deliveries
-        if self._pending_deliveries > 0:
+        pending = self.pending_deliveries()
+        if pending > 0:
             self._logger.info(
-                f"Waiting for {self._pending_deliveries} pending alert deliveries before closing"
+                f"Waiting for {pending} pending alert deliveries before closing"
             )
-            remaining = self._producer.flush(5000)  # 5 second timeout
+            self.wait_for_pending_alerts(timeout_seconds=self._settings.kafka_alert_delivery_timeout_seconds)
+            remaining = self._producer.flush(self._settings.kafka_alert_delivery_timeout_seconds)
             if remaining > 0:
                 self._logger.warning(
                     f"Flush timeout: {remaining} messages still in producer queue"
                 )
-        
+
         delivery_errors = self.get_and_clear_delivery_errors()
         if delivery_errors:
             self._logger.warning(
                 "Alert delivery errors occurred",
                 extra={"extra": {"error_count": len(delivery_errors), "errors": delivery_errors}}
             )
-        
+
         self._consumer.close()
         self._logger.info("Kafka consumer and producer closed")
 
