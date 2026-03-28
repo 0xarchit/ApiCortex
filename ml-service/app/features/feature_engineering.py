@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
+import logging
 from collections import defaultdict, deque
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import UTC, datetime, timedelta
 from statistics import mean
-from typing import Deque
+from typing import Deque, Any
 
 import numpy as np
 
@@ -14,6 +16,12 @@ from app.schemas.telemetry_event import TelemetryEvent
 WINDOW_1M = timedelta(minutes=1)
 WINDOW_5M = timedelta(minutes=5)
 WINDOW_15M = timedelta(minutes=15)
+
+# Lateness threshold: events older than this are considered late/stale
+LATENESS_THRESHOLD = timedelta(minutes=30)
+
+# Minimum number of events required for stable feature computation
+MIN_EVENTS_FOR_WARMUP = 100
 
 FEATURE_COLUMNS = [
     "latency_mean",
@@ -52,20 +60,132 @@ class FeatureRow:
     org_id: str
     api_id: str
     endpoint: str
+    method: str
     features: dict[str, float]
+    is_warmed_up: bool = False
 
 
 class RollingFeatureEngineer:
-    """Maintains per-endpoint rolling state and computes model features."""
+    """Maintains per-endpoint rolling state and computes model features with warm-up tracking."""
 
-    def __init__(self) -> None:
+    def __init__(self, logger: logging.Logger | None = None) -> None:
         self._history: dict[EventKey, Deque[EventSnapshot]] = defaultdict(deque)
+        self._event_counts: dict[EventKey, int] = defaultdict(int)
+        self._is_warmed_up: dict[EventKey, bool] = {}
+        self._logger = logger or logging.getLogger(__name__)
+        self._total_events_processed = 0
+        self._late_events_dropped = 0
+        self._out_of_order_events = 0
+        self._max_event_time_seen: dict[EventKey, datetime] = {}
+
+    def is_endpoint_warmed_up(self, key: EventKey) -> bool:
+        """Check if an endpoint has sufficient history for stable predictions."""
+        return self._is_warmed_up.get(key, False)
+
+    def get_event_skew_metrics(self) -> dict[str, Any]:
+        """Get metrics on event timing anomalies."""
+        return {
+            "late_events_dropped": self._late_events_dropped,
+            "out_of_order_events": self._out_of_order_events,
+            "total_events_processed": self._total_events_processed,
+        }
+
+    def _is_event_too_late(self, event_time: datetime, key: EventKey, now: datetime) -> bool:
+        """Check if event is too far in the past (older than lateness threshold)."""
+        age = now - event_time
+        return age > LATENESS_THRESHOLD
+
+    def _is_event_out_of_order(self, event_time: datetime, key: EventKey) -> bool:
+        """Check if event timestamp is before the maximum timestamp seen for this key."""
+        max_time = self._max_event_time_seen.get(key)
+        if max_time is None:
+            return False
+        return event_time < max_time
+
+    def bootstrap_from_state(self, state: dict[str, Any]) -> None:
+        """Load rolling history from persisted state."""
+        try:
+            for key_dict, events_data in state.get("history", {}).items():
+                key = EventKey(**json.loads(key_dict))
+                queue: Deque[EventSnapshot] = deque()
+                for event_dict in events_data:
+                    # Convert ISO timestamp back to datetime
+                    event_dict["timestamp"] = datetime.fromisoformat(event_dict["timestamp"])
+                    snapshot = EventSnapshot(**event_dict)
+                    queue.append(snapshot)
+                self._history[key] = queue
+            
+            self._event_counts = defaultdict(int, {
+                EventKey(**json.loads(k)): v 
+                for k, v in state.get("event_counts", {}).items()
+            })
+            self._is_warmed_up = {
+                EventKey(**json.loads(k)): v 
+                for k, v in state.get("is_warmed_up", {}).items()
+            }
+            
+            # Restore max_event_time_seen
+            self._max_event_time_seen = {
+                EventKey(**json.loads(k)): datetime.fromisoformat(v)
+                for k, v in state.get("max_event_time_seen", {}).items()
+            }
+            
+            self._total_events_processed = state.get("total_events_processed", 0)
+            self._late_events_dropped = state.get("late_events_dropped", 0)
+            self._out_of_order_events = state.get("out_of_order_events", 0)
+            
+            self._logger.info("Loaded feature state from bootstrap", extra={
+                "extra": {
+                    "keys_restored": len(self._history),
+                    "total_events": self._total_events_processed,
+                    "late_events_dropped": self._late_events_dropped,
+                    "out_of_order_events": self._out_of_order_events,
+                }
+            })
+        except Exception as exc:
+            self._logger.warning("Failed to bootstrap feature state", extra={
+                "extra": {"error": str(exc)}
+            })
+
+    def export_state(self) -> dict[str, Any]:
+        """Export rolling history for persistence across restarts."""
+        return {
+            "history": {
+                json.dumps({"org_id": k.org_id, "api_id": k.api_id, "endpoint": k.endpoint, "method": k.method}): [
+                    {
+                        "timestamp": e.timestamp.isoformat(),
+                        "status": e.status,
+                        "latency_ms": e.latency_ms,
+                        "schema_hash": e.schema_hash
+                    }
+                    for e in self._history[k]
+                ]
+                for k in self._history.keys()
+            },
+            "event_counts": {
+                json.dumps({"org_id": k.org_id, "api_id": k.api_id, "endpoint": k.endpoint, "method": k.method}): v
+                for k, v in self._event_counts.items()
+            },
+            "is_warmed_up": {
+                json.dumps({"org_id": k.org_id, "api_id": k.api_id, "endpoint": k.endpoint, "method": k.method}): v
+                for k, v in self._is_warmed_up.items()
+            },
+            "max_event_time_seen": {
+                json.dumps({"org_id": k.org_id, "api_id": k.api_id, "endpoint": k.endpoint, "method": k.method}): v.isoformat()
+                for k, v in self._max_event_time_seen.items()
+            },
+            "total_events_processed": self._total_events_processed,
+            "late_events_dropped": self._late_events_dropped,
+            "out_of_order_events": self._out_of_order_events,
+        }
+
 
     def ingest(self, events: list[TelemetryEvent]) -> list[FeatureRow]:
         if not events:
             return []
 
         touched_keys: set[EventKey] = set()
+        now = datetime.now(UTC)
 
         for event in sorted(events, key=lambda e: e.timestamp):
             key = EventKey(
@@ -74,15 +194,63 @@ class RollingFeatureEngineer:
                 endpoint=event.endpoint,
                 method=event.method,
             )
+            event_time = event.timestamp.astimezone(UTC)
+
+            # Check for late events (too old)
+            if self._is_event_too_late(event_time, key, now):
+                self._late_events_dropped += 1
+                self._logger.debug(
+                    "Dropping late event (outside lateness threshold)",
+                    extra={"extra": {
+                        "event_age_minutes": (now - event_time).total_seconds() / 60,
+                        "threshold_minutes": LATENESS_THRESHOLD.total_seconds() / 60,
+                        "endpoint": key.endpoint,
+                    }}
+                )
+                continue
+
+            # Track out-of-order events but still process them
+            if self._is_event_out_of_order(event_time, key):
+                self._out_of_order_events += 1
+                self._logger.debug(
+                    "Processing out-of-order event",
+                    extra={"extra": {
+                        "event_time": event_time.isoformat(),
+                        "max_time_seen": self._max_event_time_seen[key].isoformat() if key in self._max_event_time_seen else None,
+                        "endpoint": key.endpoint,
+                    }}
+                )
+
+            # Update max event time for this endpoint
+            if key not in self._max_event_time_seen or event_time > self._max_event_time_seen[key]:
+                self._max_event_time_seen[key] = event_time
+
             snapshot = EventSnapshot(
-                timestamp=event.timestamp.astimezone(UTC),
+                timestamp=event_time,
                 status=event.status,
                 latency_ms=event.latency_ms,
                 schema_hash=event.schema_hash,
             )
             self._history[key].append(snapshot)
+            self._event_counts[key] += 1
+            self._total_events_processed += 1
             touched_keys.add(key)
-            self._prune_old(key, snapshot.timestamp)
+            self._prune_old(key, event_time)
+            
+            # Update warm-up status
+            if not self._is_warmed_up.get(key, False):
+                if self._event_counts[key] >= MIN_EVENTS_FOR_WARMUP:
+                    self._is_warmed_up[key] = True
+                    self._logger.info(
+                        "Endpoint warmed up",
+                        extra={"extra": {
+                            "org_id": key.org_id,
+                            "api_id": key.api_id,
+                            "endpoint": key.endpoint,
+                            "method": key.method,
+                            "total_events": self._event_counts[key]
+                        }}
+                    )
 
         rows: list[FeatureRow] = []
         for key in touched_keys:
@@ -93,7 +261,9 @@ class RollingFeatureEngineer:
                     org_id=key.org_id,
                     api_id=key.api_id,
                     endpoint=key.endpoint,
+                    method=key.method,
                     features=self._compute_features(key, latest_ts),
+                    is_warmed_up=self._is_warmed_up.get(key, False),
                 )
             )
         return rows
