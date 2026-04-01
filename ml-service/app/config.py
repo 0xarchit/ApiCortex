@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -117,15 +118,33 @@ class Settings(BaseModel):
                     "ssl.key.pem": key,
                 }
             )
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    """Load and validate settings from environment."""
     load_dotenv()
+    
+    # Check for required environment variables
+    required_env_vars = ["KAFKA_SERVICE_URI", "TIMESCALE_DATABASE"]
+    missing_vars = [var for var in required_env_vars if not os.getenv(var, "").strip()]
+    
+    if missing_vars:
+        error_msg = (
+            f"Required environment variables not set: {', '.join(missing_vars)}\n"
+            f"Please set these variables or copy .env.example to .env and configure it.\n"
+            f"Never commit secrets to version control."
+        )
+        # Print to stderr and exit immediately on startup
+        print(error_msg, file=sys.stderr)
+        raise RuntimeError(error_msg)
+    
     data = {
-        "KAFKA_SERVICE_URI": os.getenv("KAFKA_SERVICE_URI", ""),
+        "KAFKA_SERVICE_URI": os.getenv("KAFKA_SERVICE_URI", "").strip(),
         "KAFKA_CA_CERT": os.getenv("KAFKA_CA_CERT"),
         "KAFKA_SERVICE_CERT": os.getenv("KAFKA_SERVICE_CERT"),
         "KAFKA_SERVICE_KEY": os.getenv("KAFKA_SERVICE_KEY"),
-        "TIMESCALE_DATABASE": os.getenv("TIMESCALE_DATABASE", ""),
+        "TIMESCALE_DATABASE": os.getenv("TIMESCALE_DATABASE", "").strip(),
         "model_path": os.getenv("MODEL_PATH", "model/xgboost_failure_prediction.pkl"),
         "alert_threshold": float(os.getenv("ALERT_THRESHOLD", "0.8")),
         "enable_shap": os.getenv("ENABLE_SHAP", "true").strip().lower() in {"1", "true", "yes"},
@@ -141,4 +160,6 @@ def get_settings() -> Settings:
     try:
         return Settings.model_validate(data)
     except ValidationError as exc:
-        raise RuntimeError(f"Invalid ML service configuration: {exc}") from exc
+        error_msg = f"Invalid ML service configuration:\n{exc}"
+        print(error_msg, file=sys.stderr)
+        raise RuntimeError(error_msg) from exc
