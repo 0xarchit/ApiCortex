@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import require_role
 from app.db.session import get_db
-from app.schemas.api import APICreate, APIOut, EndpointCreate, EndpointOut
+from app.schemas.api import APICreate, APIOut, APIUpdate, EndpointCreate, EndpointOut
 from app.services.api_service import APIService
 from app.services.plan_service import PlanService
 
@@ -31,6 +31,38 @@ def create_api(
     if not PlanService.check_api_quota(db, org_id=org_id, plan=plan):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Plan API quota exceeded")
     return APIService.create_api(db, org_id=org_id, payload=payload)
+
+
+@router.patch("/{api_id}", response_model=APIOut)
+def update_api(
+    api_id: uuid.UUID,
+    payload: APIUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_role("admin")),
+):
+    org_id = uuid.UUID(str(request.state.org_id))
+    try:
+        return APIService.update_api(db, org_id=org_id, api_id=api_id, payload=payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.delete("/{api_id}")
+def delete_api(
+    api_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_role("admin")),
+):
+    org_id = uuid.UUID(str(request.state.org_id))
+    try:
+        APIService.delete_api(db, org_id=org_id, api_id=api_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    return {"status": "deleted"}
 
 
 @router.get("/{api_id}/endpoints", response_model=list[EndpointOut])

@@ -23,7 +23,7 @@ from app.db.session import engine
 from app.services.alert_subscriber import AlertSubscriber
 from app.services.job_worker import JobWorker
 import app.models
-from app.routers import apis, auth, contracts, dashboard, orgs, predictions, telemetry, testing
+from app.routers import apis, auth, contracts, dashboard, endpoints, orgs, predictions, telemetry, testing
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -65,6 +65,7 @@ app.add_middleware(RequestContextMiddleware)
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(orgs.router, prefix="/orgs", tags=["orgs"], dependencies=[Depends(get_current_claims)])
 app.include_router(apis.router, prefix="/apis", tags=["apis"], dependencies=[Depends(get_current_claims)])
+app.include_router(endpoints.router, prefix="/endpoints", tags=["endpoints"], dependencies=[Depends(get_current_claims)])
 app.include_router(contracts.router, prefix="/contracts", tags=["contracts"], dependencies=[Depends(get_current_claims)])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"], dependencies=[Depends(get_current_claims)])
 app.include_router(telemetry.router, prefix="/telemetry", tags=["telemetry"], dependencies=[Depends(get_current_claims)])

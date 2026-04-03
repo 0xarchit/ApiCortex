@@ -37,7 +37,14 @@ class Settings(BaseSettings):
     cookie_domain: str | None = Field(default=None, validation_alias="COOKIE_DOMAIN")
 
     trusted_hosts: list[str] = Field(default_factory=lambda: ["*"], validation_alias="TRUSTED_HOSTS")
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"], validation_alias="CORS_ORIGINS")
+    cors_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://apicortex.0xarchit.is-a.dev",
+        ],
+        validation_alias="CORS_ORIGINS",
+    )
 
     rate_limit_per_minute: int = Field(default=120, validation_alias="RATE_LIMIT_PER_MINUTE")
 
