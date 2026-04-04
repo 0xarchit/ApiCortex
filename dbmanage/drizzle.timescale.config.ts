@@ -45,7 +45,7 @@ if (useLibpqCompat) {
 export default defineConfig({
   out: "./drizzle/timescale",
   schema: "./src/timescale/schema.ts",
-  tablesFilter: ["api_telemetry"],
+  tablesFilter: ["api_telemetry", "api_failure_predictions"],
   dialect: "postgresql",
   dbCredentials: {
     url: timescaleUrl.toString(),
