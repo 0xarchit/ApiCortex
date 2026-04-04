@@ -56,6 +56,18 @@ try {
   await client.query(
     "SELECT add_retention_policy('api_telemetry', INTERVAL '90 days', if_not_exists => TRUE)",
   );
+  await client.query(
+    "SELECT create_hypertable('api_failure_predictions', 'time', if_not_exists => TRUE, migrate_data => TRUE)",
+  );
+  await client.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_api_failure_predictions_idempotent ON api_failure_predictions (org_id, api_id, endpoint, method, time)",
+  );
+  await client.query(
+    "CREATE INDEX IF NOT EXISTS idx_api_failure_predictions_lookup ON api_failure_predictions (org_id, api_id, endpoint, time DESC)",
+  );
+  await client.query(
+    "SELECT add_retention_policy('api_failure_predictions', INTERVAL '90 days', if_not_exists => TRUE)",
+  );
 } finally {
   await client.end();
 }

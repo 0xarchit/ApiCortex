@@ -22,6 +22,13 @@
       "when": 1772358897266,
       "tag": "0002_striped_nighthawk",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775410634593,
+      "tag": "0004_strange_black_bird",
+      "breakpoints": true
     }
   ]
 }

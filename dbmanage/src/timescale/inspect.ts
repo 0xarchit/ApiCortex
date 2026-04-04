@@ -45,15 +45,30 @@ const client = new Client({ connectionString: timescaleUrl.toString() });
 await client.connect();
 
 try {
-  const indexes = await client.query(
+  const telemetryIndexes = await client.query(
     "select indexname,indexdef from pg_indexes where schemaname='public' and tablename='api_telemetry' order by indexname",
   );
-  const constraints = await client.query(
+  const telemetryConstraints = await client.query(
     "select conname, pg_get_constraintdef(oid) as definition from pg_constraint where conrelid='public.api_telemetry'::regclass order by conname",
+  );
+  const predictionIndexes = await client.query(
+    "select indexname,indexdef from pg_indexes where schemaname='public' and tablename='api_failure_predictions' order by indexname",
+  );
+  const predictionConstraints = await client.query(
+    "select conname, pg_get_constraintdef(oid) as definition from pg_constraint where conrelid='public.api_failure_predictions'::regclass order by conname",
   );
   console.log(
     JSON.stringify(
-      { indexes: indexes.rows, constraints: constraints.rows },
+      {
+        api_telemetry: {
+          indexes: telemetryIndexes.rows,
+          constraints: telemetryConstraints.rows,
+        },
+        api_failure_predictions: {
+          indexes: predictionIndexes.rows,
+          constraints: predictionConstraints.rows,
+        },
+      },
       null,
       2,
     ),
