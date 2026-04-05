@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -97,33 +99,89 @@ func main() {
 	rateLimiter := api.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst, 5*time.Minute)
 
 	var activePoller *poller.Poller
-	if cfg.ActivePolling && len(cfg.PollTargets) > 0 {
-		targets := make([]poller.Target, 0, len(cfg.PollTargets))
-		for i := range cfg.PollTargets {
-			t := cfg.PollTargets[i]
-			targets = append(targets, poller.Target{
-				Name:          t.Name,
-				OrgID:         t.OrgID,
-				APIID:         t.APIID,
-				BaseURL:       t.BaseURL,
-				Path:          t.Path,
-				Method:        t.Method,
-				Interval:      time.Duration(t.IntervalSeconds) * time.Second,
-				Timeout:       time.Duration(t.TimeoutMS) * time.Millisecond,
-				Headers:       t.Headers,
-				Body:          t.Body,
-				ClientRegion:  t.ClientRegion,
-				SchemaVersion: t.SchemaVersion,
-			})
-		}
-		activePoller = poller.New(targets, batcher, metricsRegistry, liveTracker, log.Logger)
+	pollingSyncState := &pollSyncState{}
+	if cfg.ActivePolling {
+		staticTargets := buildStaticTargets(cfg)
+		activePoller = poller.New(staticTargets, batcher, metricsRegistry, liveTracker, log.Logger)
 		activePoller.Start(ctx)
-		log.Info().Int("targets", len(targets)).Msg("active endpoint polling started")
+
+		targetStore, err := poller.NewDBTargetStore(
+			cfg.ControlPlaneDBURL,
+			cfg.DefaultPollInterval,
+			cfg.DefaultPollTimeout,
+			cfg.PollingBackoffMax,
+		)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to initialize polling target store")
+		}
+		if targetStore != nil {
+			defer func() {
+				if err := targetStore.Close(); err != nil {
+					log.Error().Err(err).Msg("failed to close polling target store")
+				}
+			}()
+		}
+
+		syncTargets := func() {
+			pollingSyncState.setAttempt()
+			metricsRegistry.IncPollerSync()
+
+			desired := make([]poller.Target, 0, len(staticTargets))
+			desired = append(desired, staticTargets...)
+
+			if targetStore != nil {
+				dbTargets, dbErr := targetStore.ListTargets(ctx)
+				if dbErr != nil {
+					metricsRegistry.IncPollerSyncError()
+					pollingSyncState.setError(dbErr.Error())
+					log.Error().Err(dbErr).Msg("polling target sync failed")
+				} else {
+					desired = mergeTargets(desired, dbTargets)
+				}
+			}
+
+			activePoller.Reconcile(desired)
+			activeCount := activePoller.ActiveTargetCount()
+			metricsRegistry.SetPollerTargetsActive(activeCount)
+			pollingSyncState.setSuccess(activeCount)
+			log.Info().Int("targets", activeCount).Msg("polling targets synchronized")
+		}
+
+		syncTargets()
+
+		go func() {
+			ticker := time.NewTicker(cfg.PollingSyncInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					syncTargets()
+				}
+			}
+		}()
+
+		log.Info().Int("static_targets", len(staticTargets)).Msg("active endpoint polling started")
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/telemetry", h.IngestTelemetry)
 	mux.HandleFunc("/v1/endpoints/live", h.ListLiveEndpoints)
+	mux.HandleFunc("/v1/endpoints/live/status", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if activePoller == nil {
+			_, _ = w.Write([]byte(`{"monitoring_enabled":false,"active_targets":0,"items":[]}`))
+			return
+		}
+		payload := map[string]any{
+			"monitoring_enabled": true,
+			"active_targets":     activePoller.ActiveTargetCount(),
+			"sync":               pollingSyncState.snapshot(),
+			"items":              activePoller.Snapshot(),
+		}
+		_ = json.NewEncoder(w).Encode(payload)
+	})
 	mux.HandleFunc("/health", h.Health)
 	mux.HandleFunc("/ready", h.Ready)
 	mux.Handle("/metrics", metricsRegistry)
@@ -137,6 +195,11 @@ func main() {
 		api.SecurityHeadersMiddleware(),
 		api.RateLimitMiddleware(rateLimiter, log.Logger),
 		api.APIKeyAuthMiddleware(cfg.RequireAPIKey, cfg.IngestAPIKey),
+		api.CORSMiddleware([]string{
+			"http://localhost:3000",
+			"http://127.0.0.1:3000",
+			"https://apicortex.0xarchit.is-a.dev",
+		}),
 	)
 
 	srv := &http.Server{
@@ -171,6 +234,103 @@ func main() {
 		activePoller.Wait()
 	}
 	log.Info().Msg("ingest-service stopped")
+}
+
+func buildStaticTargets(cfg config.Config) []poller.Target {
+	targets := make([]poller.Target, 0, len(cfg.PollTargets))
+	for i := range cfg.PollTargets {
+		t := cfg.PollTargets[i]
+		targets = append(targets, poller.Target{
+			Name:          t.Name,
+			OrgID:         t.OrgID,
+			APIID:         t.APIID,
+			BaseURL:       t.BaseURL,
+			Path:          t.Path,
+			Method:        t.Method,
+			Interval:      time.Duration(t.IntervalSeconds) * time.Second,
+			Timeout:       time.Duration(t.TimeoutMS) * time.Millisecond,
+			Headers:       t.Headers,
+			Body:          t.Body,
+			ClientRegion:  t.ClientRegion,
+			SchemaVersion: t.SchemaVersion,
+			MaxBackoff:    cfg.PollingBackoffMax,
+		})
+	}
+	return targets
+}
+
+func mergeTargets(primary []poller.Target, secondary []poller.Target) []poller.Target {
+	merged := make(map[string]poller.Target, len(primary)+len(secondary))
+	for i := range primary {
+		key := pollingTargetKey(primary[i])
+		if key == "" {
+			continue
+		}
+		merged[key] = primary[i]
+	}
+	for i := range secondary {
+		key := pollingTargetKey(secondary[i])
+		if key == "" {
+			continue
+		}
+		merged[key] = secondary[i]
+	}
+	out := make([]poller.Target, 0, len(merged))
+	for _, target := range merged {
+		out = append(out, target)
+	}
+	return out
+}
+
+func pollingTargetKey(target poller.Target) string {
+	orgID := strings.TrimSpace(target.OrgID)
+	apiID := strings.TrimSpace(target.APIID)
+	if orgID == "" || apiID == "" {
+		return ""
+	}
+	if endpointID := strings.TrimSpace(target.EndpointID); endpointID != "" {
+		return strings.Join([]string{orgID, apiID, endpointID}, "|")
+	}
+	return strings.Join([]string{orgID, apiID, strings.ToUpper(strings.TrimSpace(target.Method)), strings.TrimSpace(target.Path)}, "|")
+}
+
+type pollSyncState struct {
+	mu          sync.RWMutex
+	lastAttempt time.Time
+	lastSuccess time.Time
+	lastError   string
+	activeCount int
+}
+
+func (s *pollSyncState) setAttempt() {
+	s.mu.Lock()
+	s.lastAttempt = time.Now().UTC()
+	s.mu.Unlock()
+}
+
+func (s *pollSyncState) setSuccess(activeCount int) {
+	s.mu.Lock()
+	s.lastSuccess = time.Now().UTC()
+	s.lastError = ""
+	s.activeCount = activeCount
+	s.mu.Unlock()
+}
+
+func (s *pollSyncState) setError(message string) {
+	s.mu.Lock()
+	s.lastError = message
+	s.mu.Unlock()
+}
+
+func (s *pollSyncState) snapshot() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return map[string]any{
+		"last_attempt": s.lastAttempt,
+		"last_success": s.lastSuccess,
+		"last_error":   s.lastError,
+		"active_count": s.activeCount,
+	}
 }
 
 func withRequestLogging(next http.Handler, logger zerolog.Logger) http.Handler {
