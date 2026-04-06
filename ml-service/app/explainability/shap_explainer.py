@@ -39,8 +39,11 @@ class ShapExplainer:
                 feature_name = str(feature_frame.columns[idx])
                 contribution = float(values[idx])
                 abs_contribution = float(abs_values[idx])
+                feature_value = float(feature_frame.iloc[0, idx])
                 features.append({
                     "feature": feature_name,
+                    "name": feature_name,
+                    "value": feature_value,
                     "contribution": contribution,
                     "abs_contribution": abs_contribution,
                 })

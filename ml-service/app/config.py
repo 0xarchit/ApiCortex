@@ -24,6 +24,7 @@ class Settings(BaseModel):
     model_path: Path = Path("model/xgboost_failure_prediction.pkl")
     enable_shap: bool = True
     shap_top_k: int = 5
+    shap_min_risk: float = 0.65
 
     alert_threshold: float = 0.8
     log_level: str = "INFO"
@@ -75,6 +76,13 @@ class Settings(BaseModel):
     def _alert_threshold_range(cls, value: float) -> float:
         if value < 0.0 or value > 1.0:
             raise ValueError("alert_threshold must be within [0.0, 1.0]")
+        return value
+
+    @field_validator("shap_min_risk")
+    @classmethod
+    def _shap_min_risk_range(cls, value: float) -> float:
+        if value < 0.0 or value > 1.0:
+            raise ValueError("shap_min_risk must be within [0.0, 1.0]")
         return value
 
     @field_validator("kafka_alert_delivery_timeout_seconds", "shutdown_timeout_seconds")
@@ -171,6 +179,7 @@ def get_settings() -> Settings:
         "model_path": os.getenv("MODEL_PATH", "model/xgboost_failure_prediction.pkl"),
         "alert_threshold": float(os.getenv("ALERT_THRESHOLD", "0.8")),
         "enable_shap": os.getenv("ENABLE_SHAP", "true").strip().lower() in {"1", "true", "yes"},
+        "shap_min_risk": float(os.getenv("SHAP_MIN_RISK", "0.65")),
         "log_level": os.getenv("LOG_LEVEL", "INFO"),
         "kafka_topic_raw": os.getenv("KAFKA_TOPIC_RAW", "telemetry.raw"),
         "kafka_topic_alerts": os.getenv("KAFKA_TOPIC_ALERTS", "alerts"),

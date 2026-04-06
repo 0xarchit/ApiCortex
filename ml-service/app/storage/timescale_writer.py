@@ -22,8 +22,9 @@ class PredictionRecord:
     prediction: str
     confidence: float
     top_features: list[dict[str, Any]]
+    feature_values: dict[str, float]
     model_version: str = "1.0"
-    feature_schema_version: str = "1.0"
+    feature_schema_version: str = "2.0"
     model_hash: str = ""
     is_warmed_up: bool = False
 
@@ -40,14 +41,21 @@ class TimescaleWriter:
 
     def _get_conn(self):
         conn = self._pool.getconn()
+        if conn.closed:
+            self._pool.putconn(conn, close=True)
+            conn = self._pool.getconn()
         conn.autocommit = False
         return conn
 
-    def _put_conn(self, conn) -> None:
-        self._pool.putconn(conn)
+    def _put_conn(self, conn, close: bool = False) -> None:
+        if conn is None:
+            return
+        should_close = close or bool(conn.closed)
+        self._pool.putconn(conn, close=should_close)
 
     def _ensure_schema(self) -> None:
         conn = self._get_conn()
+        discard_conn = False
         try:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -119,8 +127,9 @@ class TimescaleWriter:
                         prediction TEXT NOT NULL,
                         confidence DOUBLE PRECISION NOT NULL,
                         top_features JSONB NOT NULL DEFAULT '[]'::jsonb,
+                        feature_values JSONB NOT NULL DEFAULT '{}'::jsonb,
                         model_version TEXT NOT NULL DEFAULT '1.0',
-                        feature_schema_version TEXT NOT NULL DEFAULT '1.0',
+                        feature_schema_version TEXT NOT NULL DEFAULT '2.0',
                         model_hash TEXT DEFAULT '',
                         is_warmed_up BOOLEAN DEFAULT false
                     );
@@ -141,13 +150,19 @@ class TimescaleWriter:
                 cursor.execute(
                     """
                     ALTER TABLE api_failure_predictions
+                    ADD COLUMN IF NOT EXISTS feature_values JSONB NOT NULL DEFAULT '{}'::jsonb;
+                    """
+                )
+                cursor.execute(
+                    """
+                    ALTER TABLE api_failure_predictions
                     ADD COLUMN IF NOT EXISTS model_version TEXT NOT NULL DEFAULT '1.0';
                     """
                 )
                 cursor.execute(
                     """
                     ALTER TABLE api_failure_predictions
-                    ADD COLUMN IF NOT EXISTS feature_schema_version TEXT NOT NULL DEFAULT '1.0';
+                    ADD COLUMN IF NOT EXISTS feature_schema_version TEXT NOT NULL DEFAULT '2.0';
                     """
                 )
                 cursor.execute(
@@ -191,10 +206,12 @@ class TimescaleWriter:
                 )
             conn.commit()
         except Exception:
-            conn.rollback()
+            discard_conn = True
+            if not conn.closed:
+                conn.rollback()
             raise
         finally:
-            self._put_conn(conn)
+            self._put_conn(conn, close=discard_conn)
 
     @staticmethod
     def _bucket_time(ts: datetime) -> datetime:
@@ -207,6 +224,7 @@ class TimescaleWriter:
             return
 
         conn = self._get_conn()
+        discard_conn = False
         try:
             with conn.cursor() as cursor:
                 execute_batch(
@@ -246,16 +264,19 @@ class TimescaleWriter:
                 )
             conn.commit()
         except Exception:
-            conn.rollback()
+            discard_conn = True
+            if not conn.closed:
+                conn.rollback()
             raise
         finally:
-            self._put_conn(conn)
+            self._put_conn(conn, close=discard_conn)
 
     def write_predictions(self, records: list[PredictionRecord]) -> None:
         if not records:
             return
 
         conn = self._get_conn()
+        discard_conn = False
         try:
             with conn.cursor() as cursor:
                 execute_batch(
@@ -271,17 +292,19 @@ class TimescaleWriter:
                         prediction,
                         confidence,
                         top_features,
+                        feature_values,
                         model_version,
                         feature_schema_version,
                         model_hash,
                         is_warmed_up
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (org_id, api_id, endpoint, method, time)
                     DO UPDATE SET
                         risk_score = GREATEST(EXCLUDED.risk_score, api_failure_predictions.risk_score),
                         prediction = EXCLUDED.prediction,
                         confidence = EXCLUDED.confidence,
                         top_features = EXCLUDED.top_features,
+                        feature_values = EXCLUDED.feature_values,
                         model_version = EXCLUDED.model_version,
                         feature_schema_version = EXCLUDED.feature_schema_version,
                         model_hash = EXCLUDED.model_hash,
@@ -298,6 +321,7 @@ class TimescaleWriter:
                             record.prediction,
                             record.confidence,
                             Json(record.top_features),
+                            Json(record.feature_values),
                             record.model_version,
                             record.feature_schema_version,
                             record.model_hash,
@@ -309,10 +333,12 @@ class TimescaleWriter:
                 )
             conn.commit()
         except Exception:
-            conn.rollback()
+            discard_conn = True
+            if not conn.closed:
+                conn.rollback()
             raise
         finally:
-            self._put_conn(conn)
+            self._put_conn(conn, close=discard_conn)
 
     def close(self) -> None:
         self._pool.closeall()
