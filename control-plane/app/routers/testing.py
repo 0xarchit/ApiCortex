@@ -1,3 +1,4 @@
+import uuid
 import ipaddress
 import socket
 import time
@@ -5,9 +6,11 @@ from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.models.api import API
 from app.schemas.testing import TestRequest, TestResponse
 from app.services.contract_service import ContractService
 
@@ -25,7 +28,7 @@ def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     )
 
 
-def _validate_outbound_test_url(raw_url: str) -> None:
+def _normalized_origin(raw_url: str) -> tuple[str, str, int]:
     parsed = urlsplit(raw_url)
     scheme = (parsed.scheme or "").lower()
     host = (parsed.hostname or "").strip().lower()
@@ -37,6 +40,17 @@ def _validate_outbound_test_url(raw_url: str) -> None:
         raise HTTPException(status_code=400, detail="Invalid target URL")
     if host == "localhost":
         raise HTTPException(status_code=400, detail="Local/internal targets are not allowed")
+
+    return scheme, host, port
+
+
+def _origin_base_url(scheme: str, host: str, port: int) -> str:
+    if (scheme == "http" and port == 80) or (scheme == "https" and port == 443):
+        return f"{scheme}://{host}"
+    return f"{scheme}://{host}:{port}"
+
+
+def _validate_public_target(host: str, port: int) -> None:
 
     try:
         ip = ipaddress.ip_address(host)
@@ -56,19 +70,52 @@ def _validate_outbound_test_url(raw_url: str) -> None:
         if _is_blocked_ip(resolved):
             raise HTTPException(status_code=400, detail="Target resolves to private/internal IP")
 
+
+def _resolve_outbound_target(raw_url: str, allowed_base_urls: list[str]) -> tuple[str, str]:
+    requested = urlsplit(raw_url)
+    scheme, host, port = _normalized_origin(raw_url)
+    _validate_public_target(host, port)
+
+    allowed_origins: set[tuple[str, str, int]] = set()
+    for base_url in allowed_base_urls:
+        try:
+            allowed_origins.add(_normalized_origin(str(base_url)))
+        except HTTPException:
+            continue
+
+    if (scheme, host, port) not in allowed_origins:
+        raise HTTPException(status_code=403, detail="Target host is not registered for this organization")
+
+    relative_url = requested.path or "/"
+    if requested.query:
+        relative_url = f"{relative_url}?{requested.query}"
+
+    return _origin_base_url(scheme, host, port), relative_url
+
 @router.post("/request", response_model=TestResponse)
 async def proxy_test_request(payload: TestRequest, request: Request, db: Session = Depends(get_db)):
     headers = payload.headers or {}
     start_time = time.time()
-    org_id = getattr(request.state, "org_id", None)
-    target_url = str(payload.url)
-    _validate_outbound_test_url(target_url)
+    org_id_raw = getattr(request.state, "org_id", None)
+    if org_id_raw is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        org_id = uuid.UUID(str(org_id_raw))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    allowed_base_urls = list(db.scalars(select(API.base_url).where(API.org_id == org_id)).all())
+    if not allowed_base_urls:
+        raise HTTPException(status_code=403, detail="No API base URL registered for this organization")
+
+    base_url, relative_url = _resolve_outbound_target(str(payload.url), allowed_base_urls)
     
-    async with httpx.AsyncClient(follow_redirects=False, timeout=httpx.Timeout(10.0, connect=3.0)) as client:
+    async with httpx.AsyncClient(base_url=base_url, follow_redirects=False, timeout=httpx.Timeout(10.0, connect=3.0)) as client:
         try:
             response = await client.request(
                 method=payload.method,
-                url=target_url,
+                url=relative_url,
                 headers=headers,
                 json=payload.body if isinstance(payload.body, (dict, list)) else None,
                 data=payload.body if isinstance(payload.body, str) else None,
