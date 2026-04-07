@@ -1,8 +1,9 @@
-import uuid
 import ipaddress
+import posixpath
 import socket
 import time
-from urllib.parse import urlsplit
+import uuid
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -71,7 +72,21 @@ def _validate_public_target(host: str, port: int) -> None:
             raise HTTPException(status_code=400, detail="Target resolves to private/internal IP")
 
 
-def _resolve_outbound_target(raw_url: str, allowed_base_urls: list[str]) -> tuple[str, str]:
+def _sanitize_relative_path(path: str) -> str:
+    decoded = unquote(path or "/")
+    if not decoded.startswith("/"):
+        decoded = "/" + decoded
+    normalized = posixpath.normpath(decoded)
+    if not normalized.startswith("/"):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if normalized.startswith("//"):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if normalized in {".", ".."} or normalized.startswith("/../"):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    return normalized
+
+
+def _resolve_outbound_target(raw_url: str, allowed_base_urls: list[str]) -> tuple[str, str, list[tuple[str, str]]]:
     requested = urlsplit(raw_url)
     scheme, host, port = _normalized_origin(raw_url)
     _validate_public_target(host, port)
@@ -86,11 +101,11 @@ def _resolve_outbound_target(raw_url: str, allowed_base_urls: list[str]) -> tupl
     if (scheme, host, port) not in allowed_origins:
         raise HTTPException(status_code=403, detail="Target host is not registered for this organization")
 
-    relative_url = requested.path or "/"
-    if requested.query:
-        relative_url = f"{relative_url}?{requested.query}"
+    relative_url = _sanitize_relative_path(requested.path or "/")
+    query_params = parse_qsl(requested.query, keep_blank_values=True)
 
-    return _origin_base_url(scheme, host, port), relative_url
+    return _origin_base_url(scheme, host, port), relative_url, query_params
+
 
 @router.post("/request", response_model=TestResponse)
 async def proxy_test_request(payload: TestRequest, request: Request, db: Session = Depends(get_db)):
@@ -109,13 +124,14 @@ async def proxy_test_request(payload: TestRequest, request: Request, db: Session
     if not allowed_base_urls:
         raise HTTPException(status_code=403, detail="No API base URL registered for this organization")
 
-    base_url, relative_url = _resolve_outbound_target(str(payload.url), allowed_base_urls)
-    
+    base_url, relative_url, query_params = _resolve_outbound_target(str(payload.url), allowed_base_urls)
+
     async with httpx.AsyncClient(base_url=base_url, follow_redirects=False, timeout=httpx.Timeout(10.0, connect=3.0)) as client:
         try:
             response = await client.request(
                 method=payload.method,
                 url=relative_url,
+                params=query_params or None,
                 headers=headers,
                 json=payload.body if isinstance(payload.body, (dict, list)) else None,
                 data=payload.body if isinstance(payload.body, str) else None,
