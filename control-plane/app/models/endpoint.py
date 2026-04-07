@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,7 +17,12 @@ class Endpoint(Base):
 	org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
 	path: Mapped[str] = mapped_column(String(1024), nullable=False)
 	method: Mapped[str] = mapped_column(String(16), nullable=False)
+	monitoring_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true", default=True)
+	poll_interval_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+	timeout_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+	poll_headers_json: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
 	created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+	updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 	api = relationship("API", back_populates="endpoints")
 	contracts = relationship("Contract", back_populates="endpoint", cascade="all, delete-orphan")

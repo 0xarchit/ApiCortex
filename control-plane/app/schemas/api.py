@@ -10,6 +10,11 @@ class APICreate(BaseModel):
     base_url: HttpUrl
 
 
+class APIUpdate(BaseModel):
+    name: str | None = None
+    base_url: HttpUrl | None = None
+
+
 class APIOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -22,6 +27,23 @@ class APIOut(BaseModel):
 class EndpointCreate(BaseModel):
     path: str
     method: str
+    monitoring_enabled: bool = True
+    poll_interval_seconds: int | None = None
+    timeout_ms: int | None = None
+    poll_headers_json: dict[str, str] | None = None
+
+
+class EndpointDirectCreate(EndpointCreate):
+    api_id: uuid.UUID
+
+
+class EndpointUpdate(BaseModel):
+    path: str | None = None
+    method: str | None = None
+    monitoring_enabled: bool | None = None
+    poll_interval_seconds: int | None = None
+    timeout_ms: int | None = None
+    poll_headers_json: dict[str, str] | None = None
 
 
 class EndpointOut(BaseModel):
@@ -31,7 +53,12 @@ class EndpointOut(BaseModel):
     api_id: uuid.UUID
     path: str
     method: str
+    monitoring_enabled: bool
+    poll_interval_seconds: int | None = None
+    timeout_ms: int | None = None
+    poll_headers_json: dict[str, str] | None = None
     created_at: datetime
+    updated_at: datetime
 
 
 class OpenAPISpecCreate(BaseModel):

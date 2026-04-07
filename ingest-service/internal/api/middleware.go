@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"net"
@@ -19,6 +18,7 @@ import (
 type contextKey string
 
 const requestIDContextKey contextKey = "request_id"
+const ingestAPIKeyContextKey contextKey = "ingest_api_key"
 
 type ipLimiter struct {
 	limiter  *rate.Limiter
@@ -84,6 +84,37 @@ func Chain(middlewares ...func(http.Handler) http.Handler) func(http.Handler) ht
 			h = middlewares[i](h)
 		}
 		return h
+	}
+}
+
+func CORSMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
+	origins := make(map[string]struct{}, len(allowedOrigins))
+	for _, origin := range allowedOrigins {
+		trimmed := strings.TrimSpace(origin)
+		if trimmed == "" {
+			continue
+		}
+		origins[trimmed] = struct{}{}
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := strings.TrimSpace(r.Header.Get("Origin"))
+			if _, ok := origins[origin]; ok {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-API-Key, X-Request-ID")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			}
+
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
 	}
 }
 
@@ -153,22 +184,44 @@ func APIKeyAuthMiddleware(require bool, apiKey string) func(http.Handler) http.H
 				next.ServeHTTP(w, r)
 				return
 			}
-
-			provided := strings.TrimSpace(r.Header.Get("X-API-Key"))
+			provided := ExtractProvidedAPIKey(r)
 			if provided == "" {
-				authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-				if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-					provided = strings.TrimSpace(authHeader[7:])
-				}
-			}
-
-			if !secureEqual(provided, apiKey) {
 				writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
-			next.ServeHTTP(w, r)
+			if secureEqual(provided, apiKey) {
+				ctx := context.WithValue(r.Context(), ingestAPIKeyContextKey, provided)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+			if r.URL.Path != "/v1/telemetry" {
+				writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+			ctx := context.WithValue(r.Context(), ingestAPIKeyContextKey, provided)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func ExtractProvidedAPIKey(r *http.Request) string {
+	provided := strings.TrimSpace(r.Header.Get("X-API-Key"))
+	if provided != "" {
+		return provided
+	}
+	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+	if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+		return strings.TrimSpace(authHeader[7:])
+	}
+	return ""
+}
+
+func ProvidedAPIKeyFromContext(ctx context.Context) string {
+	v := ctx.Value(ingestAPIKeyContextKey)
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
 
 func RequestIDFromContext(ctx context.Context) string {
@@ -185,9 +238,17 @@ func secureEqual(a, b string) bool {
 	if len(ab) == 0 || len(bb) == 0 {
 		return false
 	}
-	ha := sha256.Sum256(ab)
-	hb := sha256.Sum256(bb)
-	return subtle.ConstantTimeCompare(ha[:], hb[:]) == 1
+	maxLen := len(ab)
+	if len(bb) > maxLen {
+		maxLen = len(bb)
+	}
+	pa := make([]byte, maxLen)
+	pb := make([]byte, maxLen)
+	copy(pa, ab)
+	copy(pb, bb)
+	valuesEqual := subtle.ConstantTimeCompare(pa, pb) == 1
+	lengthsEqual := subtle.ConstantTimeEq(int32(len(ab)), int32(len(bb))) == 1
+	return valuesEqual && lengthsEqual
 }
 
 func clientIP(r *http.Request) string {

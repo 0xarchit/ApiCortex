@@ -13,6 +13,7 @@ type TelemetryEvent struct {
 	Timestamp         string `json:"timestamp"`
 	OrgID             string `json:"org_id"`
 	APIID             string `json:"api_id"`
+	EndpointID        string `json:"endpoint_id,omitempty"`
 	Endpoint          string `json:"endpoint"`
 	Method            string `json:"method"`
 	Status            int    `json:"status"`
@@ -42,6 +43,11 @@ func (e TelemetryEvent) Validate() error {
 	}
 	if _, err := uuid.Parse(e.APIID); err != nil {
 		return fmt.Errorf("api_id must be a valid uuid")
+	}
+	if strings.TrimSpace(e.EndpointID) != "" {
+		if _, err := uuid.Parse(strings.TrimSpace(e.EndpointID)); err != nil {
+			return fmt.Errorf("endpoint_id must be a valid uuid")
+		}
 	}
 	if strings.TrimSpace(e.Endpoint) == "" {
 		return fmt.Errorf("endpoint is required")

@@ -11,11 +11,18 @@ type Registry struct {
 	ingestRequestsTotal int64
 	eventsReceivedTotal int64
 	eventsPublished     int64
+	telemetryStored     int64
 	kafkaErrorsTotal    int64
+	storageErrorsTotal  int64
 	batchFlushTotal     int64
 	polledEventsQueued  int64
 	pollingErrorsTotal  int64
 	pollingDroppedTotal int64
+	pollerTargetsActive int64
+	pollerSyncTotal     int64
+	pollerSyncErrors    int64
+	pollerTargetStarted int64
+	pollerTargetStopped int64
 }
 
 func NewRegistry() *Registry {
@@ -34,8 +41,16 @@ func (r *Registry) AddEventsPublished(n int) {
 	atomic.AddInt64(&r.eventsPublished, int64(n))
 }
 
+func (r *Registry) AddTelemetryStored(n int) {
+	atomic.AddInt64(&r.telemetryStored, int64(n))
+}
+
 func (r *Registry) IncKafkaErrors() {
 	atomic.AddInt64(&r.kafkaErrorsTotal, 1)
+}
+
+func (r *Registry) IncStorageErrors() {
+	atomic.AddInt64(&r.storageErrorsTotal, 1)
 }
 
 func (r *Registry) IncBatchFlush() {
@@ -54,6 +69,29 @@ func (r *Registry) IncPollingDropped() {
 	atomic.AddInt64(&r.pollingDroppedTotal, 1)
 }
 
+func (r *Registry) SetPollerTargetsActive(value int) {
+	if value < 0 {
+		value = 0
+	}
+	atomic.StoreInt64(&r.pollerTargetsActive, int64(value))
+}
+
+func (r *Registry) IncPollerSync() {
+	atomic.AddInt64(&r.pollerSyncTotal, 1)
+}
+
+func (r *Registry) IncPollerSyncError() {
+	atomic.AddInt64(&r.pollerSyncErrors, 1)
+}
+
+func (r *Registry) IncPollerTargetStarted() {
+	atomic.AddInt64(&r.pollerTargetStarted, 1)
+}
+
+func (r *Registry) IncPollerTargetStopped() {
+	atomic.AddInt64(&r.pollerTargetStopped, 1)
+}
+
 func (r *Registry) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	_, _ = w.Write([]byte(r.Render()))
@@ -64,15 +102,27 @@ func (r *Registry) Render() string {
 	appendCounter(&b, "ingest_requests_total", atomic.LoadInt64(&r.ingestRequestsTotal))
 	appendCounter(&b, "events_received_total", atomic.LoadInt64(&r.eventsReceivedTotal))
 	appendCounter(&b, "events_published_total", atomic.LoadInt64(&r.eventsPublished))
+	appendCounter(&b, "telemetry_stored_total", atomic.LoadInt64(&r.telemetryStored))
 	appendCounter(&b, "kafka_errors_total", atomic.LoadInt64(&r.kafkaErrorsTotal))
+	appendCounter(&b, "storage_errors_total", atomic.LoadInt64(&r.storageErrorsTotal))
 	appendCounter(&b, "batch_flush_total", atomic.LoadInt64(&r.batchFlushTotal))
 	appendCounter(&b, "polled_events_queued_total", atomic.LoadInt64(&r.polledEventsQueued))
 	appendCounter(&b, "polling_errors_total", atomic.LoadInt64(&r.pollingErrorsTotal))
 	appendCounter(&b, "polling_dropped_total", atomic.LoadInt64(&r.pollingDroppedTotal))
+	appendGauge(&b, "poller_targets_active", atomic.LoadInt64(&r.pollerTargetsActive))
+	appendCounter(&b, "poller_sync_total", atomic.LoadInt64(&r.pollerSyncTotal))
+	appendCounter(&b, "poller_sync_errors_total", atomic.LoadInt64(&r.pollerSyncErrors))
+	appendCounter(&b, "poller_targets_started_total", atomic.LoadInt64(&r.pollerTargetStarted))
+	appendCounter(&b, "poller_targets_stopped_total", atomic.LoadInt64(&r.pollerTargetStopped))
 	return b.String()
 }
 
 func appendCounter(b *strings.Builder, name string, value int64) {
 	_, _ = fmt.Fprintf(b, "# TYPE %s counter\n", name)
+	_, _ = fmt.Fprintf(b, "%s %d\n", name, value)
+}
+
+func appendGauge(b *strings.Builder, name string, value int64) {
+	_, _ = fmt.Fprintf(b, "# TYPE %s gauge\n", name)
 	_, _ = fmt.Fprintf(b, "%s %d\n", name, value)
 }

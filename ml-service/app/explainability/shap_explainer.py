@@ -26,16 +26,27 @@ class ShapExplainer:
 
             shap_values = self._explainer.shap_values(feature_frame)
             if isinstance(shap_values, list):
-                
+                # Multi-class output, take the last class (failure prediction)
                 values = np.asarray(shap_values[-1])[0]
             else:
                 values = np.asarray(shap_values)[0]
 
-            top_indices = np.argsort(np.abs(values))[::-1][: self._top_k]
+            # Get top features by absolute contribution
+            abs_values = np.abs(values)
+            top_indices = np.argsort(abs_values)[::-1][: self._top_k]
             features = []
             for idx in top_indices:
                 feature_name = str(feature_frame.columns[idx])
-                features.append({"feature": feature_name, "contribution": float(values[idx])})
+                contribution = float(values[idx])
+                abs_contribution = float(abs_values[idx])
+                feature_value = float(feature_frame.iloc[0, idx])
+                features.append({
+                    "feature": feature_name,
+                    "name": feature_name,
+                    "value": feature_value,
+                    "contribution": contribution,
+                    "abs_contribution": abs_contribution,
+                })
             return features
         except Exception as exc:
             self._logger.warning("SHAP explainability unavailable", extra={"extra": {"error": str(exc)}})

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -23,12 +24,20 @@ class Settings(BaseModel):
     model_path: Path = Path("model/xgboost_failure_prediction.pkl")
     enable_shap: bool = True
     shap_top_k: int = 5
+    shap_min_risk: float = 0.65
 
     alert_threshold: float = 0.8
     log_level: str = "INFO"
 
     consumer_max_poll_interval_ms: int = 300000
     consumer_session_timeout_ms: int = 45000
+    kafka_alert_delivery_timeout_seconds: float = 5.0
+    processing_failure_max_retries: int = 3
+    processing_failure_dlq_topic: str | None = None
+    shutdown_timeout_seconds: float = 15.0
+    db_pool_min_connections: int = 1
+    db_pool_max_connections: int = 8
+    db_write_page_size: int = 500
 
     @field_validator("kafka_service_uri", "timescale_database", mode="before")
     @classmethod
@@ -69,11 +78,34 @@ class Settings(BaseModel):
             raise ValueError("alert_threshold must be within [0.0, 1.0]")
         return value
 
+    @field_validator("shap_min_risk")
+    @classmethod
+    def _shap_min_risk_range(cls, value: float) -> float:
+        if value < 0.0 or value > 1.0:
+            raise ValueError("shap_min_risk must be within [0.0, 1.0]")
+        return value
+
+    @field_validator("kafka_alert_delivery_timeout_seconds", "shutdown_timeout_seconds")
+    @classmethod
+    def _positive_float(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("value must be greater than 0")
+        return value
+
+    @field_validator("processing_failure_max_retries", "db_pool_min_connections", "db_pool_max_connections", "db_write_page_size")
+    @classmethod
+    def _positive_int(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("value must be greater than 0")
+        return value
+
     @model_validator(mode="after")
     def _validate_kafka_tls_material(self) -> "Settings":
         values = [self.kafka_ca_cert, self.kafka_service_cert, self.kafka_service_key]
         if any(values) and not all(values):
             raise ValueError("KAFKA_CA_CERT, KAFKA_SERVICE_CERT, and KAFKA_SERVICE_KEY must all be provided together")
+        if self.db_pool_min_connections > self.db_pool_max_connections:
+            raise ValueError("db_pool_min_connections must be <= db_pool_max_connections")
         return self
 
     @property
@@ -117,18 +149,37 @@ class Settings(BaseModel):
                     "ssl.key.pem": key,
                 }
             )
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    """Load and validate settings from environment."""
     load_dotenv()
+    
+    # Check for required environment variables
+    required_env_vars = ["KAFKA_SERVICE_URI", "TIMESCALE_DATABASE"]
+    missing_vars = [var for var in required_env_vars if not os.getenv(var, "").strip()]
+    
+    if missing_vars:
+        error_msg = (
+            f"Required environment variables not set: {', '.join(missing_vars)}\n"
+            f"Please set these variables or copy .env.example to .env and configure it.\n"
+            f"Never commit secrets to version control."
+        )
+        # Print to stderr and exit immediately on startup
+        print(error_msg, file=sys.stderr)
+        raise RuntimeError(error_msg)
+    
     data = {
-        "KAFKA_SERVICE_URI": os.getenv("KAFKA_SERVICE_URI", ""),
+        "KAFKA_SERVICE_URI": os.getenv("KAFKA_SERVICE_URI", "").strip(),
         "KAFKA_CA_CERT": os.getenv("KAFKA_CA_CERT"),
         "KAFKA_SERVICE_CERT": os.getenv("KAFKA_SERVICE_CERT"),
         "KAFKA_SERVICE_KEY": os.getenv("KAFKA_SERVICE_KEY"),
-        "TIMESCALE_DATABASE": os.getenv("TIMESCALE_DATABASE", ""),
+        "TIMESCALE_DATABASE": os.getenv("TIMESCALE_DATABASE", "").strip(),
         "model_path": os.getenv("MODEL_PATH", "model/xgboost_failure_prediction.pkl"),
         "alert_threshold": float(os.getenv("ALERT_THRESHOLD", "0.8")),
         "enable_shap": os.getenv("ENABLE_SHAP", "true").strip().lower() in {"1", "true", "yes"},
+        "shap_min_risk": float(os.getenv("SHAP_MIN_RISK", "0.65")),
         "log_level": os.getenv("LOG_LEVEL", "INFO"),
         "kafka_topic_raw": os.getenv("KAFKA_TOPIC_RAW", "telemetry.raw"),
         "kafka_topic_alerts": os.getenv("KAFKA_TOPIC_ALERTS", "alerts"),
@@ -137,8 +188,17 @@ def get_settings() -> Settings:
         "consumer_max_poll_interval_ms": int(os.getenv("KAFKA_MAX_POLL_INTERVAL_MS", "300000")),
         "consumer_session_timeout_ms": int(os.getenv("KAFKA_SESSION_TIMEOUT_MS", "45000")),
         "shap_top_k": int(os.getenv("SHAP_TOP_K", "5")),
+        "kafka_alert_delivery_timeout_seconds": float(os.getenv("KAFKA_ALERT_DELIVERY_TIMEOUT_SECONDS", "5.0")),
+        "processing_failure_max_retries": int(os.getenv("PROCESSING_FAILURE_MAX_RETRIES", "3")),
+        "processing_failure_dlq_topic": os.getenv("PROCESSING_FAILURE_DLQ_TOPIC"),
+        "shutdown_timeout_seconds": float(os.getenv("SHUTDOWN_TIMEOUT_SECONDS", "15.0")),
+        "db_pool_min_connections": int(os.getenv("DB_POOL_MIN_CONNECTIONS", "1")),
+        "db_pool_max_connections": int(os.getenv("DB_POOL_MAX_CONNECTIONS", "8")),
+        "db_write_page_size": int(os.getenv("DB_WRITE_PAGE_SIZE", "500")),
     }
     try:
         return Settings.model_validate(data)
     except ValidationError as exc:
-        raise RuntimeError(f"Invalid ML service configuration: {exc}") from exc
+        error_msg = f"Invalid ML service configuration:\n{exc}"
+        print(error_msg, file=sys.stderr)
+        raise RuntimeError(error_msg) from exc
