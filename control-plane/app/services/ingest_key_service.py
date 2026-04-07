@@ -1,7 +1,7 @@
-import hashlib
 import secrets
 import uuid
 
+import bcrypt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,7 +13,7 @@ class IngestKeyService:
     @staticmethod
     def hash_key(raw_key: str) -> str:
         payload = f"{settings.ingest_key_pepper}:{raw_key}".encode("utf-8")
-        return hashlib.sha256(payload).hexdigest()
+        return bcrypt.hashpw(payload, bcrypt.gensalt(rounds=12)).decode("utf-8")
 
     @staticmethod
     def get_org_key(db: Session, org_id: uuid.UUID) -> OrganizationIngestKey | None:

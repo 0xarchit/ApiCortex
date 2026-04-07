@@ -1,4 +1,7 @@
+import ipaddress
+import socket
 import time
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -10,17 +13,62 @@ from app.services.contract_service import ContractService
 
 router = APIRouter()
 
+
+def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def _validate_outbound_test_url(raw_url: str) -> None:
+    parsed = urlsplit(raw_url)
+    scheme = (parsed.scheme or "").lower()
+    host = (parsed.hostname or "").strip().lower()
+    port = parsed.port or (443 if scheme == "https" else 80)
+
+    if scheme not in {"http", "https"}:
+        raise HTTPException(status_code=400, detail="Only http/https URLs are allowed")
+    if not host:
+        raise HTTPException(status_code=400, detail="Invalid target URL")
+    if host == "localhost":
+        raise HTTPException(status_code=400, detail="Local/internal targets are not allowed")
+
+    try:
+        ip = ipaddress.ip_address(host)
+        if _is_blocked_ip(ip):
+            raise HTTPException(status_code=400, detail="Private/internal targets are not allowed")
+        return
+    except ValueError:
+        pass
+
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        raise HTTPException(status_code=400, detail="Target host cannot be resolved")
+
+    for info in infos:
+        resolved = ipaddress.ip_address(info[4][0])
+        if _is_blocked_ip(resolved):
+            raise HTTPException(status_code=400, detail="Target resolves to private/internal IP")
+
 @router.post("/request", response_model=TestResponse)
 async def proxy_test_request(payload: TestRequest, request: Request, db: Session = Depends(get_db)):
     headers = payload.headers or {}
     start_time = time.time()
     org_id = getattr(request.state, "org_id", None)
+    target_url = str(payload.url)
+    _validate_outbound_test_url(target_url)
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(follow_redirects=False, timeout=httpx.Timeout(10.0, connect=3.0)) as client:
         try:
             response = await client.request(
                 method=payload.method,
-                url=str(payload.url),
+                url=target_url,
                 headers=headers,
                 json=payload.body if isinstance(payload.body, (dict, list)) else None,
                 data=payload.body if isinstance(payload.body, str) else None,

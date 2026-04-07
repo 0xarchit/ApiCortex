@@ -2,15 +2,13 @@ package orgvalidator
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/subtle"
 	"database/sql"
-	"encoding/hex"
 	"strings"
 	"sync"
 	"time"
 
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type cacheEntry struct {
@@ -110,9 +108,10 @@ func (v *Validator) ValidateIngestKey(ctx context.Context, orgID string, provide
 		return false, nil
 	}
 	payload := []byte(v.pepper + ":" + providedAPIKey)
-	hashBytes := sha256.Sum256(payload)
-	calculated := hex.EncodeToString(hashBytes[:])
-	return subtle.ConstantTimeCompare([]byte(calculated), []byte(keyCached.keyHash)) == 1, nil
+	if err := bcrypt.CompareHashAndPassword([]byte(keyCached.keyHash), payload); err != nil {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (v *Validator) Close() error {

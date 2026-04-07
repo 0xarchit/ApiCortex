@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"net"
@@ -239,9 +238,17 @@ func secureEqual(a, b string) bool {
 	if len(ab) == 0 || len(bb) == 0 {
 		return false
 	}
-	ha := sha256.Sum256(ab)
-	hb := sha256.Sum256(bb)
-	return subtle.ConstantTimeCompare(ha[:], hb[:]) == 1
+	maxLen := len(ab)
+	if len(bb) > maxLen {
+		maxLen = len(bb)
+	}
+	pa := make([]byte, maxLen)
+	pb := make([]byte, maxLen)
+	copy(pa, ab)
+	copy(pb, bb)
+	valuesEqual := subtle.ConstantTimeCompare(pa, pb) == 1
+	lengthsEqual := subtle.ConstantTimeEq(int32(len(ab)), int32(len(bb))) == 1
+	return valuesEqual && lengthsEqual
 }
 
 func clientIP(r *http.Request) string {
