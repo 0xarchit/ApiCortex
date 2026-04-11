@@ -427,7 +427,7 @@ cd frontend && npm run dev
 | `BATCH_SIZE` | Ingest | Kafka batch size | `500` |
 | `MODEL_PATH` | ML | Path to XGBoost model | `model/xgboost.pkl` |
 | `ALERT_THRESHOLD` | ML | Alert threshold (0-1) | `0.8` |
-| `API_TESTING_URL` | Control Plane | Internal URL for Rust engine | `http://localhost:9090` |
+| `API_TESTING_URL` | Control Plane | Internal URL for Rust engine | `http://api-testing:9090` (Docker) or `http://localhost:9090` (local) |
 
 ### Configuration Files
 
