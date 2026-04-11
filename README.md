@@ -6,7 +6,7 @@
 
 
 
-```
+```text
 ====================================================================================
     █████╗ ██████╗ ██╗       ██████╗ ██████╗ ██████╗ ████████╗███████╗██╗  ██╗
    ██╔══██╗██╔══██╗██║      ██╔════╝██╔═══██╗██╔══██╗╚══██╔══╝██╔════╝╚██╗██╔╝
@@ -21,27 +21,28 @@ Predict API Failures Before They Happen
 </div>
 
 
-[![Status](https://img.shields.io/badge/Status-Active%20Development-000000.svg?style=for-the-badge&logo=rocket&logoColor=white&labelColor=000000&color=000000)](#)
+[![Status](https://img.shields.io/badge/Status-Active%20Development-000000.svg?style=for-the-badge&logo=rocket&logoColor=white&labelColor=000000&color=000000)](https://github.com/0xArchit/ApiCortex/pulse)
 [![License](https://img.shields.io/badge/License-AGPL%20v3-000000.svg?style=for-the-badge&logo=gnu&logoColor=white&labelColor=000000&color=000000)](LICENSE)  
-[![Python](https://img.shields.io/badge/Python-3.11-000000.svg?style=for-the-badge&logo=python&logoColor=white&labelColor=000000&color=000000)](#)
-[![Go](https://img.shields.io/badge/Go-1.26+-000000.svg?style=for-the-badge&logo=go&logoColor=white&labelColor=000000&color=000000)](#)
-[![NextJs](https://img.shields.io/badge/NextJs-16+-000000.svg?style=for-the-badge&logo=nextdotjs&logoColor=white&labelColor=000000&color=000000)](#)
+[![Python](https://img.shields.io/badge/Python-3.11-000000.svg?style=for-the-badge&logo=python&logoColor=white&labelColor=000000&color=000000)](https://www.python.org)
+[![Go](https://img.shields.io/badge/Go-1.26+-000000.svg?style=for-the-badge&logo=go&logoColor=white&labelColor=000000&color=000000)](https://go.dev)
+[![Rust](https://img.shields.io/badge/Rust-1.94+-000000.svg?style=for-the-badge&logo=rust&logoColor=white&labelColor=000000&color=000000)](https://rust-lang.org)
+[![NextJs](https://img.shields.io/badge/NextJs-16+-000000.svg?style=for-the-badge&logo=nextdotjs&logoColor=white&labelColor=000000&color=000000)](https://nextjs.org)
 
 ---
 
 ## ✦ Table of Contents
-1. [Overview](#overview)
-2. [Architecture](#architecture)
-3. [Features](#features)
-4. [System Components](#system-components)
-5. [Data Flow](#data-flow)
-6. [Installation](#installation)
-7. [Configuration](#configuration)
-8. [Usage](#usage)
-9. [API Reference](#api-reference)
-10. [Monitoring](#monitoring)
-11. [Troubleshooting](#troubleshooting)
-12. [License](#license)
+1. [Overview](#-overview)
+2. [Architecture](#-architecture)
+3. [Features](#-features)
+4. [System Components](#-system-components)
+5. [Data Flow](#-data-flow)
+6. [Installation](#-installation)
+7. [Configuration](#-configuration)
+8. [Usage](#-usage)
+9. [Monitoring](#-monitoring)
+10. [Troubleshooting](#-troubleshooting)
+11. [Dependencies](#-dependencies)
+12. [License](#-license)
 
 ---
 
@@ -80,30 +81,36 @@ For the initial MVP launch, we have adopted a hybrid-cloud strategy utilizing hi
 
 ## ❖ Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         APICORTEX PLATFORM                              │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐              │
-│  │   Frontend   │    │  Control     │    │   Ingest     │              │
-│  │  (Next.js)   │◄──►│  Plane       │◄──►│  Service     │              │
-│  │              │    │  (FastAPI)   │    │  (Go)        │              │
-│  └──────────────┘    └──────────────┘    └──────────────┘              │
-│         │                   │                   │                        │
-│         │                   │                   │                        │
-│         ▼                   ▼                   ▼                        │
+│                                                                         │
+│                      ┌──────────────┐                                   │
+│                      │ API Testing  │                                   │
+│                      │ Engine (Rust)│                                   │
+│                      └──────▲───────┘                                   │
+│                             │                                           │
+│  ┌──────────────┐    ┌──────▼───────┐    ┌──────────────┐               │
+│  │   Frontend   │    │  Control     │    │   Ingest     │               │
+│  │  (Next.js)   │◄──►│  Plane       │◄──►│  Service     │               │
+│  │              │    │  (FastAPI)   │    │  (Go)        │               │
+│  └──────────────┘    └──────────────┘    └──────────────┘               │
+│         │                   │                   │                       │
+│         ▼                   ▼                   ▼                       │
 │  ┌──────────────────────────────────────────────────────────┐           │
 │  │                    Apache Kafka                          │           │
 │  │              (telemetry.raw, alerts)                     │           │
 │  └──────────────────────────────────────────────────────────┘           │
-│         │                   │                   │                        │
-│         ▼                   ▼                   ▼                        │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐              │
-│  │   ML         │    │  PostgreSQL  │    │  TimescaleDB │              │
-│  │   Service    │    │  (NeonDB)    │    │  (Metrics)   │              │
-│  │  (Python)    │    │  (Metadata)  │    │              │              │
-│  └──────────────┘    └──────────────┘    └──────────────┘              │
+│         │                   │                   │                       │
+│         ▼                   ▼                   ▼                       │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐               │
+│  │   ML         │    │  PostgreSQL  │    │  TimescaleDB │               │
+│  │   Service    │    │  (NeonDB)    │    │  (Metrics)   │               │
+│  │  (Python)    │    │  (Metadata)  │    │              │               │
+│  └──────────────┘    └──────────────┘    └──────────────┘               │
+│                                                                         │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -137,6 +144,12 @@ graph TB
         M[Anomaly Detector]
     end
     
+    subgraph "Execution Plane"
+        Q[Rust Testing Engine]
+        R[SSRF Shield]
+        S[External APIs]
+    end
+
     subgraph "Storage"
         N[(PostgreSQL)]
         O[(TimescaleDB)]
@@ -148,6 +161,9 @@ graph TB
     C --> D
     C --> E
     C --> F
+    C <--> Q
+    Q --> R
+    R --> S
     G --> H
     H --> P
     J --> P
@@ -174,7 +190,7 @@ graph TB
 | Time-series Analytics | Historical data querying | ✔ Active |
 | Alerting System | Webhook-based notifications | ✔ Active |
 | Developer Dashboard | Interactive UI with live metrics | ✔ Active |
-| API Testing | Built-in endpoint testing tool | ✔ Active |
+| API Testing | High-performance Rust execution engine | ✔ Active |
 
 ### Technical Specifications
 
@@ -182,6 +198,7 @@ graph TB
 - **Latency**: <50ms p99 for telemetry ingestion
 - **Accuracy**: 95%+ failure prediction accuracy
 - **Retention**: Configurable (default 30 days)
+- **Dependencies**: Comprehensive list in [DEPENDENCY.md](DEPENDENCY.md)
 - **Scalability**: Horizontal scaling with Kafka partitions
 
 ---
@@ -194,7 +211,7 @@ graph TB
 
 Responsible for high-throughput telemetry collection and streaming.
 
-```
+```text
 ┌─────────────────────────────────────┐
 │     Ingest Service Architecture     │
 ├─────────────────────────────────────┤
@@ -218,7 +235,7 @@ Responsible for high-throughput telemetry collection and streaming.
 
 Handles authentication, API metadata, and contract management.
 
-```
+```text
 ┌─────────────────────────────────────┐
 │    Control Plane Architecture       │
 ├─────────────────────────────────────┤
@@ -242,7 +259,7 @@ Handles authentication, API metadata, and contract management.
 
 Processes telemetry streams and generates failure predictions.
 
-```
+```text
 ┌─────────────────────────────────────┐
 │      ML Service Architecture        │
 ├─────────────────────────────────────┤
@@ -266,7 +283,7 @@ Processes telemetry streams and generates failure predictions.
 
 Developer dashboard for monitoring and management.
 
-```
+```text
 ┌─────────────────────────────────────┐
 │    Frontend Architecture            │
 ├─────────────────────────────────────┤
@@ -276,7 +293,30 @@ Developer dashboard for monitoring and management.
 │       ↓                             │
 │  Contract Validation UI             │
 └─────────────────────────────────────┘
+
+### 5. Execution Engine (Rust)
+
+**Location**: `api-testing/`
+
+High-performance, secure engine optimized for executing REST, GraphQL, and WebSocket tests with microsecond precision.
+
+```text
+┌─────────────────────────────────────┐
+│    Testing Engine Architecture      │
+├─────────────────────────────────────┤
+│  Request → Resolver → SSRF Shield   │
+│       ↓                             │
+│  Network Execution (Tokio + Reqwest)│
+│       ↓                             │
+│  Diagnostics Snapshot (DNS/TLS/TCP) │
+└─────────────────────────────────────┘
 ```
+
+**Key Files**:
+- `src/main.rs` - Axum server entry
+- `src/executor.rs` - Core execution & security logic
+- `src/protocols/` - WebSocket & HTTP handlers
+- `src/models.rs` - Result & Snapshot schemas
 
 ---
 
@@ -367,6 +407,9 @@ cd control-plane && uvicorn app.main:app --reload
 # ML Service
 cd ml-service && python app/main.py
 
+# API Testing Engine (Rust)
+cd api-testing && cargo run
+
 # Frontend
 cd frontend && npm run dev
 ```
@@ -384,6 +427,7 @@ cd frontend && npm run dev
 | `BATCH_SIZE` | Ingest | Kafka batch size | `500` |
 | `MODEL_PATH` | ML | Path to XGBoost model | `model/xgboost.pkl` |
 | `ALERT_THRESHOLD` | ML | Alert threshold (0-1) | `0.8` |
+| `API_TESTING_URL` | Control Plane | Internal URL for Rust engine | `http://api-testing:9090` (Docker) or `http://localhost:9090` (local) |
 
 ### Configuration Files
 
@@ -440,7 +484,7 @@ ENABLE_SHAP=true
 
 ### Metrics Collection
 
-```
+```text
 ┌─────────────────────────────────────┐
 │     Monitoring Stack                │
 ├─────────────────────────────────────┤
@@ -459,6 +503,7 @@ ENABLE_SHAP=true
 | Service | Endpoint | Port |
 |---------|----------|------|
 | Ingest | `/health` | 8080 |
+| API Testing | `/health` | 9090 |
 | Control Plane | `/health` | 8000 |
 | Frontend | `/` | 3000 |
 
@@ -619,6 +664,12 @@ go test ./...
 pytest
 npm test
 ```
+
+---
+
+## ✦ Dependencies
+
+For a complete breakdown of all libraries, frameworks, and tools used across our Rust, Go, Python, and Next.js services, please refer to the [DEPENDENCY.md](DEPENDENCY.md) file.
 
 ---
 
