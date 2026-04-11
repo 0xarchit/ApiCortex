@@ -213,30 +213,14 @@ impl Executor {
             }
         }
 
-        let tcp_start = Instant::now();
-
+        let ttfb_start = Instant::now();
         let fut = builder.send();
         let response = timeout(request_timeout, fut)
             .await
             .map_err(|_| ExecutorError::RequestTimeout)?
             .map_err(ExecutorError::HttpClient)?;
 
-        let tcp_elapsed_ms = tcp_start.elapsed().as_secs_f64() * 1000.0;
-
-        let tls_negotiation_time_ms = if req.url.starts_with("https") {
-            Some(tcp_elapsed_ms * 0.3)
-        } else {
-            None
-        };
-
-        let tcp_handshake_time_ms = if req.url.starts_with("https") {
-            Some(tcp_elapsed_ms * 0.7)
-        } else {
-            Some(tcp_elapsed_ms)
-        };
-
-        let ttfb_start = Instant::now();
-
+        let ttfb_ms = ttfb_start.elapsed().as_secs_f64() * 1000.0;
         let status_code = response.status().as_u16();
 
         let mut resp_headers: HashMap<String, String> = HashMap::new();
@@ -249,7 +233,6 @@ impl Executor {
         let body_bytes = response.bytes().await.map_err(ExecutorError::HttpClient)?;
         let body_size_bytes = body_bytes.len();
 
-        let ttfb_ms = ttfb_start.elapsed().as_secs_f64() * 1000.0;
         let total_ms = overall_start.elapsed().as_secs_f64() * 1000.0;
 
         let body: Value = serde_json::from_slice(&body_bytes).unwrap_or_else(|_| {
@@ -263,8 +246,8 @@ impl Executor {
             body_size_bytes,
             diagnostics: NetworkDiagnostics {
                 dns_resolution_time_ms: Some(dns_elapsed_ms),
-                tcp_handshake_time_ms,
-                tls_negotiation_time_ms,
+                tcp_handshake_time_ms: None,
+                tls_negotiation_time_ms: None,
                 time_to_first_byte_ms: Some(ttfb_ms),
                 total_time_ms: total_ms,
             },

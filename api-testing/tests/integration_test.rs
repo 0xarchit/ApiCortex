@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use axum_test::TestServer;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
@@ -13,8 +12,10 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use api_testing::executor::Executor;
 use api_testing::models::{
-    ExecuteRequest, ExecuteResponse, ExecuteResult, Protocol, WsConfig, WsStrategy,
+    ExecuteRequest, ExecuteResult, Protocol, WsConfig, WsStrategy,
 };
+use api_testing::{create_app, AppState};
+use std::sync::Arc;
 
 fn make_http_req(url: &str, http_method: &str, body: Option<Value>) -> ExecuteRequest {
     ExecuteRequest {
@@ -492,15 +493,10 @@ async fn test_ws_count_timeout_when_server_stops_early() {
 
 #[tokio::test]
 async fn test_axum_health_endpoint() {
-    use std::sync::Arc;
-
-    let _executor = Arc::new(Executor::new_unsecured());
-
-    async fn health() -> axum::response::Json<serde_json::Value> {
-        axum::response::Json(json!({"status": "ok"}))
-    }
-
-    let app = Router::new().route("/health", axum::routing::get(health));
+    let state = AppState {
+        executor: Arc::new(Executor::new_unsecured()),
+    };
+    let app = create_app(state);
     let server = TestServer::new(app).unwrap();
 
     let resp = server.get("/health").await;
@@ -511,8 +507,6 @@ async fn test_axum_health_endpoint() {
 
 #[tokio::test]
 async fn test_axum_execute_endpoint_http() {
-    use std::sync::Arc;
-
     let mock_server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/ping"))
@@ -520,26 +514,10 @@ async fn test_axum_execute_endpoint_http() {
         .mount(&mock_server)
         .await;
 
-    let executor_instance = Arc::new(Executor::new_unsecured());
-
-    #[derive(Clone)]
-    struct S(Arc<Executor>);
-
-    async fn handler(
-        State(s): State<S>,
-        Json(payload): Json<ExecuteRequest>,
-    ) -> impl axum::response::IntoResponse {
-        let test_id = payload.test_id.clone();
-        match s.0.execute(payload).await {
-            Ok(result) => (StatusCode::OK, Json(ExecuteResponse::ok(test_id, result))),
-            Err(e) => (StatusCode::OK, Json(ExecuteResponse::err(test_id, e.to_string()))),
-        }
-    }
-
-    let app = Router::new()
-        .route("/v1/execute", post(handler))
-        .with_state(S(executor_instance));
-
+    let state = AppState {
+        executor: Arc::new(Executor::new_unsecured()),
+    };
+    let app = create_app(state);
     let server = TestServer::new(app).unwrap();
 
     let payload = json!({
