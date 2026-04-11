@@ -6,7 +6,7 @@
 
 
 
-```
+```text
 ====================================================================================
     █████╗ ██████╗ ██╗       ██████╗ ██████╗ ██████╗ ████████╗███████╗██╗  ██╗
    ██╔══██╗██╔══██╗██║      ██╔════╝██╔═══██╗██╔══██╗╚══██╔══╝██╔════╝╚██╗██╔╝
@@ -21,29 +21,29 @@ Predict API Failures Before They Happen
 </div>
 
 
-[![Status](https://img.shields.io/badge/Status-Active%20Development-000000.svg?style=for-the-badge&logo=rocket&logoColor=white&labelColor=000000&color=000000)](#)
+[![Status](https://img.shields.io/badge/Status-Active%20Development-000000.svg?style=for-the-badge&logo=rocket&logoColor=white&labelColor=000000&color=000000)](https://github.com/0xArchit/ApiCortex/pulse)
 [![License](https://img.shields.io/badge/License-AGPL%20v3-000000.svg?style=for-the-badge&logo=gnu&logoColor=white&labelColor=000000&color=000000)](LICENSE)  
-[![Python](https://img.shields.io/badge/Python-3.11-000000.svg?style=for-the-badge&logo=python&logoColor=white&labelColor=000000&color=000000)](#)
-[![Go](https://img.shields.io/badge/Go-1.26+-000000.svg?style=for-the-badge&logo=go&logoColor=white&labelColor=000000&color=000000)](#)
-[![Rust](https://img.shields.io/badge/Rust-1.94+-000000.svg?style=for-the-badge&logo=rust&logoColor=white&labelColor=000000&color=000000)](#)
-[![NextJs](https://img.shields.io/badge/NextJs-16+-000000.svg?style=for-the-badge&logo=nextdotjs&logoColor=white&labelColor=000000&color=000000)](#)
+[![Python](https://img.shields.io/badge/Python-3.11-000000.svg?style=for-the-badge&logo=python&logoColor=white&labelColor=000000&color=000000)](https://www.python.org)
+[![Go](https://img.shields.io/badge/Go-1.26+-000000.svg?style=for-the-badge&logo=go&logoColor=white&labelColor=000000&color=000000)](https://go.dev)
+[![Rust](https://img.shields.io/badge/Rust-1.94+-000000.svg?style=for-the-badge&logo=rust&logoColor=white&labelColor=000000&color=000000)](https://rust-lang.org)
+[![NextJs](https://img.shields.io/badge/NextJs-16+-000000.svg?style=for-the-badge&logo=nextdotjs&logoColor=white&labelColor=000000&color=000000)](https://nextjs.org)
 
 ---
 
 ## ✦ Table of Contents
-1. [Overview](#overview)
-2. [Architecture](#architecture)
-3. [Features](#features)
-4. [System Components](#system-components)
-5. [Data Flow](#data-flow)
-6. [Installation](#installation)
-7. [Configuration](#configuration)
-8. [Usage](#usage)
-9. [API Reference](#api-reference)
-10. [Monitoring](#monitoring)
-11. [Troubleshooting](#troubleshooting)
-12. [Dependencies](#dependencies)
-13. [License](#license)
+1. [Overview](#-overview)
+2. [Architecture](#-architecture)
+3. [Features](#-features)
+4. [System Components](#-system-components)
+5. [Data Flow](#-data-flow)
+6. [Installation](#-installation)
+7. [Configuration](#-configuration)
+8. [Usage](#-usage)
+9. [API Reference](#-api-reference)
+10. [Monitoring](#-monitoring)
+11. [Troubleshooting](#-troubleshooting)
+12. [Dependencies](#-dependencies)
+13. [License](#-license)
 
 ---
 
@@ -82,7 +82,7 @@ For the initial MVP launch, we have adopted a hybrid-cloud strategy utilizing hi
 
 ## ❖ Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         APICORTEX PLATFORM                              │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -212,7 +212,7 @@ graph TB
 
 Responsible for high-throughput telemetry collection and streaming.
 
-```
+```text
 ┌─────────────────────────────────────┐
 │     Ingest Service Architecture     │
 ├─────────────────────────────────────┤
@@ -236,7 +236,7 @@ Responsible for high-throughput telemetry collection and streaming.
 
 Handles authentication, API metadata, and contract management.
 
-```
+```text
 ┌─────────────────────────────────────┐
 │    Control Plane Architecture       │
 ├─────────────────────────────────────┤
@@ -260,7 +260,7 @@ Handles authentication, API metadata, and contract management.
 
 Processes telemetry streams and generates failure predictions.
 
-```
+```text
 ┌─────────────────────────────────────┐
 │      ML Service Architecture        │
 ├─────────────────────────────────────┤
@@ -284,7 +284,7 @@ Processes telemetry streams and generates failure predictions.
 
 Developer dashboard for monitoring and management.
 
-```
+```text
 ┌─────────────────────────────────────┐
 │    Frontend Architecture            │
 ├─────────────────────────────────────┤
@@ -301,7 +301,7 @@ Developer dashboard for monitoring and management.
 
 High-performance, secure engine optimized for executing REST, GraphQL, and WebSocket tests with microsecond precision.
 
-```
+```text
 ┌─────────────────────────────────────┐
 │    Testing Engine Architecture      │
 ├─────────────────────────────────────┤
@@ -318,7 +318,6 @@ High-performance, secure engine optimized for executing REST, GraphQL, and WebSo
 - `src/executor.rs` - Core execution & security logic
 - `src/protocols/` - WebSocket & HTTP handlers
 - `src/models.rs` - Result & Snapshot schemas
-```
 
 ---
 
@@ -486,7 +485,7 @@ ENABLE_SHAP=true
 
 ### Metrics Collection
 
-```
+```text
 ┌─────────────────────────────────────┐
 │     Monitoring Stack                │
 ├─────────────────────────────────────┤
