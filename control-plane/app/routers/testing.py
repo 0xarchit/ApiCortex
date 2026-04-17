@@ -198,7 +198,8 @@ async def execute_test(payload: ExecuteRequest, request: Request):
 
     try:
         executor_url = f"{settings.api_testing_url.rstrip('/')}/v1/execute"
-        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=5.0)) as client:
+        timeout_s = min(max((payload.timeout_ms or 30000) / 1000.0, 1.0), 120.0)
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_s, connect=5.0)) as client:
             response = await client.post(
                 executor_url,
                 json=payload.model_dump(by_alias=False),
