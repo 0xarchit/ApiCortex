@@ -1,3 +1,8 @@
+"""Endpoint management endpoints.
+
+Handles endpoint-specific operations including polling configuration,
+timeout settings, and monitoring preferences.
+"""
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status

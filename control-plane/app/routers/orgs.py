@@ -1,3 +1,7 @@
+"""Organization management endpoints.
+
+Manages organizations, memberships, roles, ingest keys, and plan information.
+"""
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status

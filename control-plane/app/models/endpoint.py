@@ -1,3 +1,4 @@
+"""Endpoint model for API routes with monitoring and contracts."""
 import uuid
 from datetime import datetime
 

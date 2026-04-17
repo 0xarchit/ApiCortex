@@ -1,3 +1,9 @@
+"""API testing and proxy endpoints.
+
+Two complementary endpoints for API testing:
+- /request: Organization-allowlisted proxy for contract validation (restricted to registered API.base_url entries)
+- /execute: Executor-backed endpoint for testing any public URL (SSRF protections enforced in Rust executor layer)
+"""
 import ipaddress
 import posixpath
 import socket
@@ -7,20 +13,12 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.db.session import get_db
 from app.models.api import API
-from app.schemas.testing import (
-    ContractValidation,
-    ExecuteRequest,
-    ExecuteResponse,
-    TestRequest,
-    TestResponse,
-)
+from app.schemas.testing import TestRequest, TestResponse, ExecuteRequest, ExecuteResponse
 from app.services.contract_service import ContractService
 
 router = APIRouter()
@@ -145,13 +143,13 @@ async def proxy_test_request(payload: TestRequest, request: Request, db: Session
                 data=payload.body if isinstance(payload.body, str) else None,
             )
             elapsed_ms = int((time.time() - start_time) * 1000)
-
+            
             try:
                 resp_body = response.json()
             except ValueError:
                 resp_body = response.text
 
-            contract_validation: dict = {
+            contract_validation = {
                 "status": "missing",
                 "endpoint_id": None,
                 "path": str(payload.url.path),
@@ -167,7 +165,7 @@ async def proxy_test_request(payload: TestRequest, request: Request, db: Session
                     request_url_or_path=str(payload.url),
                     response_body=resp_body,
                 )
-
+                
             return TestResponse(
                 status=response.status_code,
                 time_ms=elapsed_ms,
@@ -181,37 +179,53 @@ async def proxy_test_request(payload: TestRequest, request: Request, db: Session
 
 
 @router.post("/execute", response_model=ExecuteResponse)
-async def execute_test(payload: ExecuteRequest, request: Request) -> ExecuteResponse:
+async def execute_test(payload: ExecuteRequest, request: Request):
+    """Execute API test by proxying to the Rust executor service.
+    
+    Allows testing any public URL. SSRF protection is enforced in the Rust executor.
+    
+    Args:
+        payload: ExecuteRequest containing test configuration and target URL.
+        request: FastAPI request with org_id in state.
+        
+    Returns:
+        ExecuteResponse with test results or error details from executor.
+    """
+    from app.core.config import settings
+    
     org_id_raw = getattr(request.state, "org_id", None)
     if org_id_raw is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        uuid.UUID(str(org_id_raw))
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    executor_url = settings.api_testing_url.rstrip("/") + "/v1/execute"
-    timeout_sec = (payload.timeout_ms or 30_000) / 1000.0 + 5.0
-
-    async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_sec, connect=5.0)) as client:
-        try:
-            resp = await client.post(
+        executor_url = f"{settings.api_testing_url.rstrip('/')}/v1/execute"
+        timeout_s = min(max((payload.timeout_ms or 30000) / 1000.0, 1.0), 120.0)
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_s, connect=5.0)) as client:
+            response = await client.post(
                 executor_url,
-                content=payload.model_dump_json(),
-                headers={"Content-Type": "application/json"},
+                json=payload.model_dump(by_alias=False),
+                headers={"X-Org-Id": str(org_id_raw)}
             )
-            resp.raise_for_status()
-            try:
-                return ExecuteResponse.model_validate(resp.json())
-            except (ValueError, ValidationError) as exc:
-                raise HTTPException(
-                    status_code=502,
-                    detail="Execution engine returned an invalid response",
-                ) from exc
-        except httpx.TimeoutException:
-            raise HTTPException(status_code=504, detail="Execution engine timed out")
-        except httpx.HTTPStatusError as exc:
-            raise HTTPException(status_code=502, detail=f"Executor error: {exc.response.status_code}")
-        except httpx.RequestError as exc:
-            raise HTTPException(status_code=503, detail=f"Cannot reach execution engine: {str(exc)}")
+            
+            if response.status_code == 200:
+                try:
+                     data = response.json()
+                     return ExecuteResponse(**data)
+                except Exception as exc:
+                     return ExecuteResponse(
+                         test_id=payload.test_id,
+                         success=False,
+                         error=f"Invalid executor response: {exc!s}",
+                    )
+            else:
+                return ExecuteResponse(
+                    test_id=payload.test_id,
+                    success=False,
+                    error=f"Executor error: {response.text}"
+                )
+    except httpx.RequestError as exc:
+        return ExecuteResponse(
+            test_id=payload.test_id,
+            success=False,
+            error=f"Executor connection error: {str(exc)}"
+        )

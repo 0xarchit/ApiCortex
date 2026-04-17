@@ -1,3 +1,8 @@
+"""SQLAlchemy ORM base configuration.
+
+Defines the declarative base for all ORM models with standardized naming
+conventions for constraints, indexes, and foreign keys.
+"""
 from sqlalchemy import MetaData
 from sqlalchemy.orm import DeclarativeBase
 
@@ -12,4 +17,5 @@ convention = {
 
 
 class Base(DeclarativeBase):
+    """Base class for all SQLAlchemy ORM models."""
     metadata = MetaData(naming_convention=convention)

@@ -1,3 +1,4 @@
+"""Request and response schemas for API management endpoints."""
 import uuid
 from datetime import datetime
 from typing import Any
@@ -6,11 +7,13 @@ from pydantic import BaseModel, ConfigDict, HttpUrl
 
 
 class APICreate(BaseModel):
+    """Request schema for creating a new API."""
     name: str
     base_url: HttpUrl
 
 
 class APIUpdate(BaseModel):
+    """Request schema for updating an existing API."""
     name: str | None = None
     base_url: HttpUrl | None = None
 

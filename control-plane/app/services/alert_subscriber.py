@@ -1,3 +1,4 @@
+"""Alert notification subscriber for Kafka-based anomaly alerts."""
 import json
 import logging
 import threading
@@ -11,6 +12,7 @@ from app.core.config import Settings
 
 
 class AlertSubscriber:
+    """Subscribes to Kafka alerts and sends notifications."""
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._logger = logging.getLogger("apicortex.alert-subscriber")

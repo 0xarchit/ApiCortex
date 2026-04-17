@@ -1,3 +1,8 @@
+"""Authentication endpoints.
+
+Handles user authentication via OAuth2 providers (Google, GitHub), JWT token
+refresh, logout, profile management, and session handling.
+"""
 import uuid
 
 from authlib.integrations.starlette_client import OAuth

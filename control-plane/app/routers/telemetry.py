@@ -1,3 +1,8 @@
+"""Telemetry and metrics endpoints.
+
+Provides endpoint statistics, request counts, latency metrics, and
+error rates from time-series data.
+"""
 import uuid
 
 from fastapi import APIRouter, Request

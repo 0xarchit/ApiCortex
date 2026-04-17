@@ -1,3 +1,8 @@
+"""Authentication and authorization utilities.
+
+Handles JWT token creation, verification, CSRF token generation, and cookie
+management for secure API access and session handling.
+"""
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -25,6 +30,16 @@ def _jwt_verify_key() -> str:
 
 
 def create_token(payload: dict[str, Any], expires_delta: timedelta, token_type: str) -> str:
+    """Create a JWT token with expiration and type.
+    
+    Args:
+        payload: Claims to include in the token.
+        expires_delta: Duration until token expiration.
+        token_type: Token type identifier ("access" or "refresh").
+        
+    Returns:
+        Encoded JWT token string.
+    """
     exp = _now_utc() + expires_delta
     to_encode = {**payload, "exp": exp, "type": token_type}
     key = _jwt_signing_key()
@@ -34,14 +49,39 @@ def create_token(payload: dict[str, Any], expires_delta: timedelta, token_type: 
 
 
 def create_access_token(payload: dict[str, Any]) -> str:
+    """Create a short-lived access token.
+    
+    Args:
+        payload: Claims to include (typically sub, org_id, role, plan).
+        
+    Returns:
+        Encoded access token string.
+    """
     return create_token(payload, timedelta(minutes=settings.access_token_exp_minutes), "access")
 
 
 def create_refresh_token(payload: dict[str, Any]) -> str:
+    """Create a long-lived refresh token.
+    
+    Args:
+        payload: Claims to include (typically sub, org_id).
+        
+    Returns:
+        Encoded refresh token string.
+    """
     return create_token(payload, timedelta(days=settings.refresh_token_exp_days), "refresh")
 
 
 def decode_token(token: str, expected_type: str | None = None) -> dict[str, Any]:
+    """Decode and verify a JWT token.
+    
+    Args:
+        token: Encoded JWT token string.
+        expected_type: Optional token type to validate ("access" or "refresh").
+        
+    Returns:
+        Decoded token claims as dictionary.
+    """
     key = _jwt_verify_key()
     if not key:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="JWT keys are not configured")
@@ -55,10 +95,25 @@ def decode_token(token: str, expected_type: str | None = None) -> dict[str, Any]
 
 
 def generate_csrf_token() -> str:
+    """Generate a cryptographically secure CSRF token.
+    
+    Returns:
+        URL-safe random token string.
+    """
     return secrets.token_urlsafe(32)
 
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str, csrf_token: str) -> None:
+    """Set authentication cookies on HTTP response.
+    
+    Configures httponly, secure, samesite, and domain attributes based on settings.
+    
+    Args:
+        response: FastAPI response object.
+        access_token: Short-lived access token.
+        refresh_token: Long-lived refresh token.
+        csrf_token: CSRF protection token.
+    """
     common = {
         "secure": settings.use_secure_cookies,
         "domain": settings.cookie_domain,
@@ -89,6 +144,11 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str, 
 
 
 def clear_auth_cookies(response: Response) -> None:
+    """Clear authentication cookies from HTTP response.
+    
+    Args:
+        response: FastAPI response object.
+    """
     response.delete_cookie(settings.access_cookie_name, path="/", domain=settings.cookie_domain)
     response.delete_cookie(settings.refresh_cookie_name, path="/", domain=settings.cookie_domain)
     response.delete_cookie(settings.csrf_cookie_name, path="/", domain=settings.cookie_domain)
@@ -98,6 +158,18 @@ def get_current_claims(
     request: Request,
     access_token: str | None = Security(access_cookie_scheme),
 ) -> dict[str, Any]:
+    """Extract and validate current user claims from request.
+    
+    Can be used as FastAPI dependency for authenticated endpoints.
+    Populates request.state with user_id, org_id, role, and plan.
+    
+    Args:
+        request: FastAPI request object.
+        access_token: JWT token from cookie (auto-extracted by FastAPI).
+        
+    Returns:
+        Decoded token claims dictionary.
+    """
     claims = getattr(request.state, "claims", None)
     if claims:
         return claims
@@ -113,6 +185,14 @@ def get_current_claims(
 
 
 def require_role(min_role: str):
+    """FastAPI dependency for role-based access control.
+    
+    Args:
+        min_role: Minimum required role ("member", "admin", or "owner").
+        
+    Returns:
+        Dependency function that validates claims and enforces role hierarchy.
+    """
     role_order = {"member": 1, "admin": 2, "owner": 3}
 
     def dependency(claims: dict[str, Any] = Depends(get_current_claims)) -> dict[str, Any]:

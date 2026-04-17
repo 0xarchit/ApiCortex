@@ -1,3 +1,4 @@
+"""Background worker for async job processing and contract cleanup."""
 import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -10,12 +11,18 @@ from app.services.job_service import JobService
 
 
 class JobWorker:
+    """Async worker that processes queued jobs and performs cleanup."""
     def __init__(self, poll_interval_seconds: float = 2.0, cleanup_interval_minutes: int = 60) -> None:
         self.poll_interval_seconds = poll_interval_seconds
         self.cleanup_interval = timedelta(minutes=cleanup_interval_minutes)
         self._last_cleanup = datetime.now(UTC)
 
     async def run(self, stop_event: asyncio.Event) -> None:
+        """Run the job worker loop.
+        
+        Args:
+            stop_event: Asyncio event to signal worker shutdown.
+        """
         while not stop_event.is_set():
             processed = False
             with SessionLocal() as db:

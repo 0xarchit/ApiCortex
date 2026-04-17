@@ -1,3 +1,4 @@
+"""Organization ingest key model for authentication with data ingestion services."""
 import uuid
 from datetime import datetime
 
@@ -9,6 +10,7 @@ from app.db.base import Base
 
 
 class OrganizationIngestKey(Base):
+    """Represents an API key for data ingestion into an organization."""
     __tablename__ = "organization_ingest_keys"
 
     org_id: Mapped[uuid.UUID] = mapped_column(

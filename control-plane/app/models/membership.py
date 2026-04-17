@@ -1,3 +1,4 @@
+"""Membership model linking users to organizations with role-based access."""
 import uuid
 
 from sqlalchemy import ForeignKey, String
@@ -8,6 +9,7 @@ from app.db.base import Base
 
 
 class Membership(Base):
+    """Represents a user's membership in an organization with a role."""
     __tablename__ = "memberships"
 
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
