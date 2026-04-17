@@ -214,3 +214,6 @@ class Settings(BaseSettings):
     @property
     def alert_subscriber_enabled(self) -> bool:
         return len(self.kafka_brokers) > 0
+
+
+settings = Settings()

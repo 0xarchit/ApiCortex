@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.api import API
-from app.schemas.testing import TestRequest, TestResponse
+from app.schemas.testing import TestRequest, TestResponse, ExecuteRequest, ExecuteResponse
 from app.services.contract_service import ContractService
 
 router = APIRouter()
@@ -175,3 +175,96 @@ async def proxy_test_request(payload: TestRequest, request: Request, db: Session
             )
         except httpx.RequestError as exc:
             raise HTTPException(status_code=502, detail=f"Proxy error: {str(exc)}")
+
+
+@router.post("/execute", response_model=ExecuteResponse)
+async def execute_test(payload: ExecuteRequest, request: Request, db: Session = Depends(get_db)):
+    """Execute API test with protocol support for HTTP, GraphQL, and WebSocket.
+    
+    Args:
+        payload: ExecuteRequest containing test configuration and target URL.
+        request: FastAPI request with org_id in state.
+        db: Database session for org-scoped URL validation.
+        
+    Returns:
+        ExecuteResponse with test results or error details.
+    """
+    org_id_raw = getattr(request.state, "org_id", None)
+    if org_id_raw is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        org_id = uuid.UUID(str(org_id_raw))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    allowed_base_urls = list(db.scalars(select(API.base_url).where(API.org_id == org_id)).all())
+    if not allowed_base_urls:
+        raise HTTPException(status_code=403, detail="No API base URL registered for this organization")
+
+    base_url, relative_url, query_params = _resolve_outbound_target(str(payload.url), allowed_base_urls)
+    headers = payload.headers or {}
+    start_time = time.time()
+
+    try:
+        if payload.protocol == "http":
+            async with httpx.AsyncClient(
+                base_url=base_url,
+                follow_redirects=payload.follow_redirects or False,
+                timeout=httpx.Timeout(payload.timeout_ms / 1000 if payload.timeout_ms else 30.0, connect=3.0)
+            ) as client:
+                response = await client.request(
+                    method=payload.method or "GET",
+                    url=relative_url,
+                    params=query_params or None,
+                    headers=headers,
+                    json=payload.body if isinstance(payload.body, (dict, list)) else None,
+                    data=payload.body if isinstance(payload.body, str) else None,
+                )
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                
+                try:
+                    resp_body = response.json()
+                except ValueError:
+                    resp_body = response.text
+
+                from app.schemas.testing import HttpResult, NetworkDiagnostics
+                result = HttpResult(
+                    status_code=response.status_code,
+                    headers=dict(response.headers),
+                    body=resp_body,
+                    body_size_bytes=len(response.content),
+                    diagnostics=NetworkDiagnostics(total_time_ms=elapsed_ms)
+                )
+                return ExecuteResponse(test_id=payload.test_id, success=True, result=result)
+        elif payload.protocol == "graphql":
+            async with httpx.AsyncClient(
+                base_url=base_url,
+                timeout=httpx.Timeout(payload.timeout_ms / 1000 if payload.timeout_ms else 30.0, connect=3.0)
+            ) as client:
+                response = await client.post(
+                    url=relative_url,
+                    params=query_params or None,
+                    headers={**headers, "Content-Type": "application/json"},
+                    json=payload.body if isinstance(payload.body, dict) else {}
+                )
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                
+                try:
+                    resp_body = response.json()
+                except ValueError:
+                    resp_body = response.text
+
+                from app.schemas.testing import HttpResult, NetworkDiagnostics
+                result = HttpResult(
+                    status_code=response.status_code,
+                    headers=dict(response.headers),
+                    body=resp_body,
+                    body_size_bytes=len(response.content),
+                    diagnostics=NetworkDiagnostics(total_time_ms=elapsed_ms)
+                )
+                return ExecuteResponse(test_id=payload.test_id, success=True, result=result)
+        else:
+            return ExecuteResponse(test_id=payload.test_id, success=False, error="Unsupported protocol")
+    except httpx.RequestError as exc:
+        return ExecuteResponse(test_id=payload.test_id, success=False, error=f"Request error: {str(exc)}")

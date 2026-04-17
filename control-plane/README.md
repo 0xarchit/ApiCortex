@@ -15,7 +15,7 @@ The control plane is the core backend service that manages:
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────┐
 │          HTTP Request                           │
 └──────────────────┬──────────────────────────────┘
@@ -125,7 +125,7 @@ HTTP middleware stack for request handling, security, and observability.
    - Structured logging
 
 2. **RateLimitMiddleware** - Per-IP rate limiting
-   - Token bucket algorithm
+   - Sliding-window request counting (60s window)
    - Configurable limit: 100 req/min per IP
    - Returns 429 on limit exceeded
 
@@ -141,7 +141,7 @@ HTTP middleware stack for request handling, security, and observability.
 5. **PlanEnforcementMiddleware** - API quota enforcement
    - Resolves feature flags and quotas
    - Checks rate limits per organization plan
-   - Caches plan data (5 min TTL)
+   - Caches quota count results (15s TTL)
 
 6. **CSRFMiddleware** - CSRF protection
    - Validates CSRF tokens for state-changing operations
