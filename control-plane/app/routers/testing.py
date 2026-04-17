@@ -197,7 +197,7 @@ async def execute_test(payload: ExecuteRequest, request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        executor_url = f"{settings.api_testing_url}/execute"
+        executor_url = f"{settings.api_testing_url.rstrip('/')}/v1/execute"
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=5.0)) as client:
             response = await client.post(
                 executor_url,
@@ -206,7 +206,15 @@ async def execute_test(payload: ExecuteRequest, request: Request):
             )
             
             if response.status_code == 200:
-                return ExecuteResponse(**response.json())
+                try:
+                     data = response.json()
+                     return ExecuteResponse(**data)
+                except Exception as exc:
+                     return ExecuteResponse(
+                         test_id=payload.test_id,
+                         success=False,
+                         error=f"Invalid executor response: {exc!s}",
+                    )
             else:
                 return ExecuteResponse(
                     test_id=payload.test_id,
