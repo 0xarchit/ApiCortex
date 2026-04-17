@@ -1,3 +1,8 @@
+"""Dashboard endpoints.
+
+Provides aggregated metrics and summaries for monitoring and observability
+across APIs and endpoints.
+"""
 import uuid
 
 from fastapi import APIRouter, Request

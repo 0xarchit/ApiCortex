@@ -1,3 +1,4 @@
+"""Dashboard service for aggregated metrics and monitoring summaries."""
 import uuid
 
 from sqlalchemy import create_engine, text
@@ -9,6 +10,7 @@ timescale_engine = create_engine(settings.timescale_url, pool_pre_ping=True)
 
 
 class DashboardService:
+    """Service for computing aggregated metrics and dashboard summaries."""
     @staticmethod
     def summary(org_id: uuid.UUID, window_hours: int = 24) -> dict:
         query = text(

@@ -1,3 +1,4 @@
+"""Organization model for multi-tenancy and billing."""
 import uuid
 from datetime import datetime
 
@@ -9,6 +10,7 @@ from app.db.base import Base
 
 
 class Organization(Base):
+    """Represents an organization that owns APIs and users."""
     __tablename__ = "organizations"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -1,3 +1,4 @@
+"""Contract model for endpoint schema validation and testing."""
 import uuid
 from datetime import datetime
 

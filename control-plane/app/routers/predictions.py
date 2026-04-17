@@ -1,3 +1,8 @@
+"""Prediction and anomaly detection endpoints.
+
+Provides access to anomaly predictions and failure likelihood scores
+for monitored endpoints.
+"""
 import uuid
 from typing import Any
 

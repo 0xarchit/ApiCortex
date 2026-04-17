@@ -1,3 +1,9 @@
+"""Control plane API application.
+
+Provides centralized management for API configurations, contracts, predictions,
+telemetry, and monitoring across the ApiCortex platform. Integrates authentication,
+rate limiting, CSRF protection, and organizational scoping.
+"""
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import asyncio

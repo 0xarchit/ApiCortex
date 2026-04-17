@@ -1,3 +1,4 @@
+"""Feature flag model for plan-based feature access control."""
 import uuid
 from datetime import datetime
 
@@ -9,6 +10,7 @@ from app.db.base import Base
 
 
 class FeatureFlag(Base):
+    """Represents a feature flag associated with an organization plan."""
     __tablename__ = "feature_flags"
     __table_args__ = (UniqueConstraint("plan", "feature_key", name="uq_feature_flag_plan_feature"),)
 

@@ -1,3 +1,4 @@
+"""Job model for async task execution and background work."""
 import uuid
 from datetime import datetime
 
@@ -9,6 +10,7 @@ from app.db.base import Base
 
 
 class Job(Base):
+    """Represents an async job in the system."""
     __tablename__ = "jobs"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

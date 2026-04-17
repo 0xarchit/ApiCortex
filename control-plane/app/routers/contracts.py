@@ -1,3 +1,8 @@
+"""Contract testing and validation endpoints.
+
+Manages API contracts (request/response schemas) and OpenAPI specifications
+for endpoints with versioning and schema validation.
+"""
 import uuid
 import json
 

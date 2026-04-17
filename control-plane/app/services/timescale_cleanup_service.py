@@ -1,3 +1,4 @@
+"""Service for cleaning up time-series data in TimescaleDB."""
 import uuid
 
 from sqlalchemy import text
@@ -6,8 +7,18 @@ from app.services.dashboard_service import timescale_engine
 
 
 class TimescaleCleanupService:
+    """Service for deleting telemetry and prediction data for APIs."""
     @staticmethod
     def delete_api_data(org_id: uuid.UUID, api_id: uuid.UUID) -> dict[str, int]:
+        """Delete all telemetry and prediction data for an API.
+        
+        Args:
+            org_id: Organization UUID.
+            api_id: API UUID.
+            
+        Returns:
+            Dictionary with counts of deleted records by type.
+        """
         params = {"org_id": str(org_id), "api_id": str(api_id)}
         with timescale_engine.begin() as conn:
             predictions_result = conn.execute(

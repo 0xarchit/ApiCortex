@@ -1,3 +1,4 @@
+"""Request and response schemas for user and authentication endpoints."""
 import uuid
 from datetime import datetime
 
@@ -5,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class UserOut(BaseModel):
+    """Response schema for user profile data."""
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -15,6 +17,7 @@ class UserOut(BaseModel):
 
 
 class AuthSessionOut(BaseModel):
+    """Response schema for authentication session information."""
     user_id: uuid.UUID
     org_id: uuid.UUID
     role: str

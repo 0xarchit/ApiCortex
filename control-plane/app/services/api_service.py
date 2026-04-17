@@ -1,3 +1,4 @@
+"""API and endpoint service for CRUD operations and monitoring configuration."""
 import uuid
 
 from sqlalchemy import select
@@ -10,12 +11,32 @@ from app.services.timescale_cleanup_service import TimescaleCleanupService
 
 
 class APIService:
+    """Service for managing APIs and their endpoints."""
     @staticmethod
     def list_apis(db: Session, org_id: uuid.UUID) -> list[API]:
+        """List all APIs for an organization.
+        
+        Args:
+            db: Database session.
+            org_id: Organization UUID.
+            
+        Returns:
+            List of API objects ordered by creation date (newest first).
+        """
         return list(db.scalars(select(API).where(API.org_id == org_id).order_by(API.created_at.desc())).all())
 
     @staticmethod
     def create_api(db: Session, org_id: uuid.UUID, payload: APICreate) -> API:
+        """Create a new API and default root endpoint.
+        
+        Args:
+            db: Database session.
+            org_id: Organization UUID.
+            payload: API creation data (name, base_url).
+            
+        Returns:
+            Created API object.
+        """
         api = API(org_id=org_id, name=payload.name, base_url=str(payload.base_url))
         db.add(api)
         db.flush()
@@ -35,6 +56,20 @@ class APIService:
 
     @staticmethod
     def update_api(db: Session, org_id: uuid.UUID, api_id: uuid.UUID, payload: APIUpdate) -> API:
+        """Update an API's name or base URL.
+        
+        Args:
+            db: Database session.
+            org_id: Organization UUID.
+            api_id: API UUID.
+            payload: Update data (name and/or base_url).
+            
+        Returns:
+            Updated API object.
+            
+        Raises:
+            ValueError: If API not found in organization.
+        """
         api = db.scalar(select(API).where(API.id == api_id, API.org_id == org_id))
         if not api:
             raise ValueError("API not found")
@@ -51,6 +86,17 @@ class APIService:
 
     @staticmethod
     def delete_api(db: Session, org_id: uuid.UUID, api_id: uuid.UUID) -> None:
+        """Delete an API and all associated telemetry/prediction data.
+        
+        Args:
+            db: Database session.
+            org_id: Organization UUID.
+            api_id: API UUID.
+            
+        Raises:
+            ValueError: If API not found in organization.
+            RuntimeError: If telemetry cleanup fails.
+        """
         api = db.scalar(select(API).where(API.id == api_id, API.org_id == org_id))
         if not api:
             raise ValueError("API not found")
@@ -65,6 +111,20 @@ class APIService:
 
     @staticmethod
     def create_endpoint(db: Session, org_id: uuid.UUID, api_id: uuid.UUID, payload: EndpointCreate) -> Endpoint:
+        """Create a new endpoint for an API.
+        
+        Args:
+            db: Database session.
+            org_id: Organization UUID.
+            api_id: API UUID.
+            payload: Endpoint creation data (path, method, poll settings, etc.).
+            
+        Returns:
+            Created Endpoint object.
+            
+        Raises:
+            ValueError: If API not found, endpoint already exists, or invalid parameters.
+        """
         api = db.scalar(select(API).where(API.id == api_id, API.org_id == org_id))
         if not api:
             raise ValueError("API not found")

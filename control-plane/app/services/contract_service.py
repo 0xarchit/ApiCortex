@@ -1,3 +1,4 @@
+"""Service for managing API contracts and OpenAPI specifications."""
 import hashlib
 import json
 from urllib.parse import urlparse
@@ -15,6 +16,7 @@ from app.services.plan_service import PlanService
 
 
 class ContractService:
+    """Service for contract creation, validation, and OpenAPI management."""
     @staticmethod
     def upload_openapi_with_api_resolution(
         db: Session,

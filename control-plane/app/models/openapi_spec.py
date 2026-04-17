@@ -1,3 +1,4 @@
+"""OpenAPI specification model for versioned API documentation."""
 import uuid
 from datetime import datetime
 
@@ -9,6 +10,7 @@ from app.db.base import Base
 
 
 class OpenAPISpec(Base):
+    """Represents an OpenAPI specification document for an API."""
     __tablename__ = "openapi_specs"
     __table_args__ = (UniqueConstraint("api_id", "version", name="uq_openapi_api_version"),)
 

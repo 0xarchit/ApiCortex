@@ -1,3 +1,4 @@
+"""Request and response schemas for API testing and contract validation."""
 import uuid
 from typing import Any, Literal
 
@@ -5,6 +6,7 @@ from pydantic import BaseModel, HttpUrl, Field
 
 
 class TestRequest(BaseModel):
+    """Request schema for testing API endpoints."""
     method: str
     url: HttpUrl
     headers: dict[str, str] | None = None
@@ -12,6 +14,7 @@ class TestRequest(BaseModel):
 
 
 class ContractValidation(BaseModel):
+    """Response schema for contract validation results."""
     status: Literal["valid", "warning", "missing"]
     endpoint_id: uuid.UUID | None = None
     path: str

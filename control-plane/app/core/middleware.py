@@ -1,3 +1,9 @@
+"""HTTP middleware for request handling and security.
+
+Provides middleware for request context tracking, rate limiting, JWT authentication,
+CSRF protection, organization scoping, and plan enforcement. Handles logging,
+error responses, and security validations.
+"""
 import json
 import logging
 import time
@@ -51,6 +57,11 @@ def _is_csrf_excluded(path: str) -> bool:
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
+    """Adds request tracking and structured logging.
+    
+    Assigns unique request ID, measures latency, populates logs with
+    request metadata (path, status, org_id, user_id).
+    """
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         request.state.request_id = request_id
@@ -73,6 +84,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Rate limiting by client IP address.
+    
+    Enforces per-minute request limits configured in settings.
+    Returns HTTP 429 when limit exceeded.
+    """
     _buckets: dict[str, deque[float]] = defaultdict(deque)
     _lock = Lock()
 
@@ -95,6 +111,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
+    """JWT authentication from cookies.
+    
+    Validates access tokens and populates request.state with claims
+    (user_id, org_id, role, plan) for protected endpoints.
+    Public paths bypass authentication.
+    """
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         path = request.url.path
         if request.method == "OPTIONS" or _is_public_path(path):
@@ -115,6 +137,11 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
 
 
 class OrgScopeMiddleware(BaseHTTPMiddleware):
+    """Enforces organization scope for protected endpoints.
+    
+    Verifies that authenticated requests have an org_id in their claims.
+    Returns HTTP 403 if org scope is missing.
+    """
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         path = request.url.path
         if request.method == "OPTIONS" or _is_public_path(path):
@@ -126,6 +153,11 @@ class OrgScopeMiddleware(BaseHTTPMiddleware):
 
 
 class PlanEnforcementMiddleware(BaseHTTPMiddleware):
+    """Enforces API quota limits based on organization plan.
+    
+    Intercepts POST /apis to check if organization has exhausted API quota.
+    Uses dynamic feature flags or static plan limits. Caches results for 15 seconds.
+    """
     _quota_cache: dict[str, tuple[float, int]] = {}
     _cache_ttl_seconds = 15.0
     _cache_lock = Lock()
@@ -172,6 +204,11 @@ class PlanEnforcementMiddleware(BaseHTTPMiddleware):
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
+    """CSRF protection for state-changing requests.
+    
+    For unsafe methods (POST, PUT, PATCH, DELETE), validates that
+    CSRF cookie and X-CSRF-Token header match. Also validates request origin.
+    """
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         path = request.url.path
         if request.method in UNSAFE_METHODS and not _is_public_path(path) and not _is_csrf_excluded(path):

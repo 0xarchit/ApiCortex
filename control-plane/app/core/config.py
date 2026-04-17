@@ -1,3 +1,8 @@
+"""Application configuration and environment settings.
+
+Manages all application settings including database URLs, authentication keys,
+OAuth providers, CORS policies, and feature flags using Pydantic settings.
+"""
 from pydantic import Field
 from pydantic import field_validator
 from pydantic import computed_field
@@ -7,6 +12,11 @@ import json
 
 
 class Settings(BaseSettings):
+    """Application configuration loaded from environment variables.
+    
+    Manages database connections, JWT configuration, OAuth providers,
+    cookie settings, CORS policies, and rate limiting parameters.
+    """
     model_config = SettingsConfigDict(env_file=(".env", "../.env"), env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "ApiCortex Control Plane"
@@ -204,6 +214,3 @@ class Settings(BaseSettings):
     @property
     def alert_subscriber_enabled(self) -> bool:
         return len(self.kafka_brokers) > 0
-
-
-settings = Settings()

@@ -1,3 +1,4 @@
+"""API model representing a monitored API resource."""
 import uuid
 from datetime import datetime
 
@@ -9,6 +10,7 @@ from app.db.base import Base
 
 
 class API(Base):
+    """Represents an external API being monitored."""
     __tablename__ = "apis"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

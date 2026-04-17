@@ -1,3 +1,8 @@
+"""API management endpoints.
+
+Provides CRUD operations for APIs and endpoints including creation, listing,
+updating, and deletion with role-based access control and plan enforcement.
+"""
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
