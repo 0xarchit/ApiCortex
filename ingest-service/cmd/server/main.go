@@ -26,6 +26,17 @@ import (
 	"ingest-service/internal/tracker"
 )
 
+// main initializes and runs the ApiCortex ingest-service.
+//
+// Startup sequence:
+//   - Load configuration from environment
+//   - Initialize metrics registry and live endpoint tracker
+//   - Connect to Kafka producer with mTLS
+//   - Initialize organization validator and TimescaleDB writer
+//   - Create event batcher with worker pool
+//   - (Optional) Start active endpoint polling service
+//   - Register HTTP handlers and middleware stack
+//   - Listen for SIGINT/SIGTERM, perform graceful shutdown
 func main() {
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
@@ -236,6 +247,9 @@ func main() {
 	log.Info().Msg("ingest-service stopped")
 }
 
+// buildStaticTargets converts configuration polling targets into poller.Target objects.
+//
+// Used for static polling targets loaded from configuration file.
 func buildStaticTargets(cfg config.Config) []poller.Target {
 	targets := make([]poller.Target, 0, len(cfg.PollTargets))
 	for i := range cfg.PollTargets {
@@ -259,6 +273,13 @@ func buildStaticTargets(cfg config.Config) []poller.Target {
 	return targets
 }
 
+// mergeTargets combines static and database-loaded targets, with primary targets taking precedence.
+//
+// Args:
+//   - primary: static targets from configuration
+//   - secondary: targets loaded from control-plane database
+//
+// Returns merged list with primary targets overriding secondary on key collision.
 func mergeTargets(primary []poller.Target, secondary []poller.Target) []poller.Target {
 	merged := make(map[string]poller.Target, len(primary)+len(secondary))
 	for i := range primary {
@@ -282,6 +303,10 @@ func mergeTargets(primary []poller.Target, secondary []poller.Target) []poller.T
 	return out
 }
 
+// pollingTargetKey generates a unique key for deduplication.
+//
+// Key format: org_id|api_id|endpoint_id (if set) or org_id|api_id|method|path.
+// Returns empty string if org_id or api_id is missing.
 func pollingTargetKey(target poller.Target) string {
 	orgID := strings.TrimSpace(target.OrgID)
 	apiID := strings.TrimSpace(target.APIID)
@@ -294,6 +319,9 @@ func pollingTargetKey(target poller.Target) string {
 	return strings.Join([]string{orgID, apiID, strings.ToUpper(strings.TrimSpace(target.Method)), strings.TrimSpace(target.Path)}, "|")
 }
 
+// pollSyncState tracks polling target synchronization attempts and status.
+//
+// Guarded by RWMutex to safely share state across sync goroutines.
 type pollSyncState struct {
 	mu          sync.RWMutex
 	lastAttempt time.Time
@@ -302,12 +330,14 @@ type pollSyncState struct {
 	activeCount int
 }
 
+// setAttempt records the timestamp of a sync attempt.
 func (s *pollSyncState) setAttempt() {
 	s.mu.Lock()
 	s.lastAttempt = time.Now().UTC()
 	s.mu.Unlock()
 }
 
+// setSuccess records successful sync with updated active target count.
 func (s *pollSyncState) setSuccess(activeCount int) {
 	s.mu.Lock()
 	s.lastSuccess = time.Now().UTC()
@@ -316,12 +346,14 @@ func (s *pollSyncState) setSuccess(activeCount int) {
 	s.mu.Unlock()
 }
 
+// setError records the most recent sync error message.
 func (s *pollSyncState) setError(message string) {
 	s.mu.Lock()
 	s.lastError = message
 	s.mu.Unlock()
 }
 
+// snapshot returns a thread-safe copy of current sync state.
 func (s *pollSyncState) snapshot() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -333,6 +365,9 @@ func (s *pollSyncState) snapshot() map[string]any {
 	}
 }
 
+// withRequestLogging wraps an HTTP handler with structured request logging.
+//
+// Logs method, path, remote IP, response status, and total duration.
 func withRequestLogging(next http.Handler, logger zerolog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -349,6 +384,7 @@ func withRequestLogging(next http.Handler, logger zerolog.Logger) http.Handler {
 	})
 }
 
+// clientIP extracts the IP address from remote address (strips port).
 func clientIP(remoteAddr string) string {
 	host := strings.TrimSpace(remoteAddr)
 	if host == "" {
@@ -361,16 +397,19 @@ func clientIP(remoteAddr string) string {
 	return host[:idx]
 }
 
+// statusWriter wraps http.ResponseWriter to capture HTTP status code.
 type statusWriter struct {
 	http.ResponseWriter
 	status int
 }
 
+// WriteHeader records the HTTP status code before writing response.
 func (s *statusWriter) WriteHeader(code int) {
 	s.status = code
 	s.ResponseWriter.WriteHeader(code)
 }
 
+// Write wraps response writing, defaulting status to 200 if not set.
 func (s *statusWriter) Write(b []byte) (int, error) {
 	if s.status == 0 {
 		s.status = http.StatusOK
