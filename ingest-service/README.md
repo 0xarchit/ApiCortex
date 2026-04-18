@@ -553,8 +553,8 @@ OpenAPI 3.0 schema in JSON format.
 
 Required fields must be present:
 - `timestamp`: RFC3339 format
-- `org_id`: Valid UUID v4
-- `api_id`: Valid UUID v4
+- `org_id`: Valid UUID
+- `api_id`: Valid UUID
 - `endpoint`: Non-empty, max 256 characters
 - `method`: Valid HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS)
 - `status`: HTTP status code (100-599)
@@ -775,7 +775,7 @@ go vet ./...
 1. **Kafka mTLS**
    - Client certificate authentication to Kafka cluster
    - Encrypted in-transit communication
-   - Certificate rotation without service restart
+   - Supports certificate-based mTLS; rotate certificates via controlled restart/redeploy
 
 2. **Database Connections**
    - PostgreSQL connection pooling with credential management
@@ -803,18 +803,18 @@ go vet ./...
 
 ## Performance Notes
 
-- **Throughput:** 50K+ events/sec on modest hardware (with 4 publisher workers)
-- **Latency:** Sub-millisecond ingestion (before batcher queueing)
+- **Throughput:** Designed for high-volume event ingestion (horizontal scaling via stateless service replicas)
+- **Latency:** Minimal ingestion latency (before batcher queueing)
 - **Memory:** Bounded by in-memory queue capacity (default 50K events)
-- **Kafka:** Batched gzip compression reduces network overhead by ~80%
+- **Kafka:** Batched gzip compression reduces network overhead
 - **Database:** Connection pooling and prepared statements minimize query overhead
 - **Polling:** Per-target goroutines; target count doesn't impact ingestion path
 - **Metrics:** Atomic operations avoid mutex contention
 
 ### Optimization Tips
 
-1. **Batch Size:** Increase to 1000+ for higher latency tolerance, lower Kafka overhead
-2. **Worker Count:** 8-16 for very high throughput (Kafka partitions should match or exceed)
+1. **Batch Size:** Increase for higher latency tolerance and lower Kafka overhead
+2. **Worker Count:** Increase for higher throughput (coordinate with Kafka partition count)
 3. **Buffer Capacity:** Increase if experiencing backpressure (`429 Too Many Requests`)
 4. **Polling Intervals:** Increase interval to reduce load (fewer synthetic events)
 5. **Cache TTL:** Increase org validation TTL if database is bottleneck (trade-off: stale data)
