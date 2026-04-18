@@ -556,7 +556,7 @@ Required fields must be present:
 - `org_id`: Valid UUID
 - `api_id`: Valid UUID
 - `endpoint`: Non-empty, max 256 characters
-- `method`: Valid HTTP method (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS)
+- `method`: Non-empty, uppercase HTTP verb (e.g., GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS)
 - `status`: HTTP status code (100-599)
 - `latency_ms`: Non-negative integer
 
@@ -616,8 +616,8 @@ Stricter checks for ML feature generation:
 - `INGEST_API_KEY`: API key (required if `REQUIRE_API_KEY=true`)
 - `RATE_LIMIT_RPS` (default: `4000`): Requests per second per IP
 - `RATE_LIMIT_BURST` (default: `8000`): Burst capacity per IP
-- `CONTROL_PLANE_DB_URL` (optional): PostgreSQL URL for org validation and polling targets
-- `ORG_VALIDATION_TTL_MINUTES` (default: `5`): Cache TTL for org lookups
+- `DATABASE` (optional): PostgreSQL URL for org validation and polling targets
+- `ORG_VALIDATION_TTL_SECONDS` (default: `60`): Cache TTL for org lookups
 - `INGEST_KEY_PEPPER` (default: `""`): Pepper string for bcrypt key validation
 - `TIMESCALE_DATABASE` (optional): TimescaleDB URL for telemetry storage
 - `LIVE_TRACK_RETENTION_MINUTES` (default: `120`): Retention for live endpoint stats
@@ -626,7 +626,7 @@ Stricter checks for ML feature generation:
 - `DEFAULT_POLL_INTERVAL_SECONDS` (default: `30`): Default polling interval
 - `DEFAULT_POLL_TIMEOUT_MS` (default: `5000`): Default polling timeout
 - `POLLING_BACKOFF_MAX_SECONDS` (default: `300`): Max backoff on poll failures
-- `POLLING_SYNC_INTERVAL_SECONDS` (default: `60`): Interval for target reconciliation
+- `POLLING_SYNC_INTERVAL_SECONDS` (default: `30`): Interval for target reconciliation
 
 ### Example .env File
 
@@ -653,9 +653,9 @@ MAX_EVENTS_PER_REQUEST=1000
 PUBLISH_WORKER_COUNT=4
 
 # Storage & Validation
-CONTROL_PLANE_DB_URL=postgresql://user:pass@localhost:5432/control-plane
+DATABASE=postgresql://user:pass@localhost:5432/control-plane
 TIMESCALE_DATABASE=postgresql://user:pass@localhost:5432/timescale
-ORG_VALIDATION_TTL_MINUTES=5
+ORG_VALIDATION_TTL_SECONDS=60
 INGEST_KEY_PEPPER=pepper-value-for-bcrypt
 
 # Polling (optional)
@@ -663,7 +663,7 @@ ACTIVE_POLLING_ENABLED=false
 DEFAULT_POLL_INTERVAL_SECONDS=30
 DEFAULT_POLL_TIMEOUT_MS=5000
 POLLING_BACKOFF_MAX_SECONDS=300
-POLLING_SYNC_INTERVAL_SECONDS=60
+POLLING_SYNC_INTERVAL_SECONDS=30
 LIVE_TRACK_RETENTION_MINUTES=120
 ```
 
@@ -691,7 +691,7 @@ docker run --rm -p 8080:8080 \
 ## Development Setup
 
 ### Prerequisites
-- Go 1.18+
+- Go 1.26+
 - PostgreSQL 12+
 - Kafka 3.0+
 
