@@ -94,7 +94,7 @@ func (e TelemetryEvent) Validate() error {
 
 // ValidateForModelProcessing validates a TelemetryEvent for processing and model input.
 //
-// Performs all standard validation plus additional checks for ML model compatibility.
+// Currently performs standard validation by calling Validate().
 // Returns error if validation fails.
 func (e TelemetryEvent) ValidateForModelProcessing() error {
 	if err := e.Validate(); err != nil {

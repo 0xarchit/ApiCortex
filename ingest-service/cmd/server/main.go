@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -146,9 +147,9 @@ func main() {
 					metricsRegistry.IncPollerSyncError()
 					pollingSyncState.setError(dbErr.Error())
 					log.Error().Err(dbErr).Msg("polling target sync failed")
-				} else {
-					desired = mergeTargets(desired, dbTargets)
+					return
 				}
+				desired = mergeTargets(desired, dbTargets)
 			}
 
 			activePoller.Reconcile(desired)
@@ -282,19 +283,19 @@ func buildStaticTargets(cfg config.Config) []poller.Target {
 // Returns merged list with primary targets overriding secondary on key collision.
 func mergeTargets(primary []poller.Target, secondary []poller.Target) []poller.Target {
 	merged := make(map[string]poller.Target, len(primary)+len(secondary))
-	for i := range primary {
-		key := pollingTargetKey(primary[i])
-		if key == "" {
-			continue
-		}
-		merged[key] = primary[i]
-	}
 	for i := range secondary {
 		key := pollingTargetKey(secondary[i])
 		if key == "" {
 			continue
 		}
 		merged[key] = secondary[i]
+	}
+	for i := range primary {
+		key := pollingTargetKey(primary[i])
+		if key == "" {
+			continue
+		}
+		merged[key] = primary[i]
 	}
 	out := make([]poller.Target, 0, len(merged))
 	for _, target := range merged {
@@ -386,15 +387,15 @@ func withRequestLogging(next http.Handler, logger zerolog.Logger) http.Handler {
 
 // clientIP extracts the IP address from remote address (strips port).
 func clientIP(remoteAddr string) string {
-	host := strings.TrimSpace(remoteAddr)
-	if host == "" {
+	remoteAddr = strings.TrimSpace(remoteAddr)
+	if remoteAddr == "" {
 		return ""
 	}
-	idx := strings.LastIndex(host, ":")
-	if idx <= 0 {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err == nil {
 		return host
 	}
-	return host[:idx]
+	return remoteAddr
 }
 
 // statusWriter wraps http.ResponseWriter to capture HTTP status code.

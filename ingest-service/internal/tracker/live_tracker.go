@@ -52,7 +52,7 @@ type LiveTracker struct {
 // NewLiveTracker creates a new live tracker with data retention.
 //
 // Args:
-//   - retention: how long to keep endpoint state data before expiration (minimum 60 minutes)
+//   - retention: how long to keep endpoint state data before expiration; defaults to 60 minutes when <= 0
 //
 // Returns configured tracker ready to receive observations.
 func NewLiveTracker(retention time.Duration) *LiveTracker {

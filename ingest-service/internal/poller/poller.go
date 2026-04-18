@@ -147,7 +147,8 @@ func (p *Poller) Wait() {
 
 // AddOrUpdateTarget adds a new polling target or updates an existing one.
 //
-// Returns target key and true if added, or false if already exists with same fingerprint.
+// Returns (targetKey, true) when a new target is added or existing target is updated.
+// Returns ("", false) if sanitization fails, poller has not been started, or a target with the same fingerprint exists.
 func (p *Poller) AddOrUpdateTarget(target Target) (string, bool) {
 	cleaned, ok := sanitizeTarget(target)
 	if !ok {

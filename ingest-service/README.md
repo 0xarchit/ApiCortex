@@ -414,8 +414,8 @@ curl -X POST http://localhost:8080/v1/telemetry \
 **Response (202 Accepted):**
 ```json
 {
-  "message": "Events queued for processing",
-  "event_count": 1
+  "accepted": 1,
+  "status": "queued"
 }
 ```
 
@@ -423,7 +423,7 @@ curl -X POST http://localhost:8080/v1/telemetry \
 - `400 Bad Request`: Invalid JSON or schema violation
 - `401 Unauthorized`: Missing or invalid API key
 - `429 Too Many Requests`: Queue full or rate limit exceeded
-- `500 Internal Server Error`: Server failure
+- `503 Service Unavailable`: Validation service unavailable
 
 ### GET /v1/endpoints/live
 
@@ -431,7 +431,6 @@ List live endpoint statistics.
 
 **Query Parameters:**
 - `limit` (1-1000, default 100): Number of results
-- `offset` (default 0): Pagination offset
 - `org_id` (optional): Filter by organization
 - `api_id` (optional): Filter by API
 - `method` (optional): Filter by HTTP method
@@ -445,6 +444,7 @@ curl "http://localhost:8080/v1/endpoints/live?org_id=550e8400-e29b-41d4-a716-446
 **Response:**
 ```json
 {
+  "count": 1,
   "items": [
     {
       "org_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -460,10 +460,7 @@ curl "http://localhost:8080/v1/endpoints/live?org_id=550e8400-e29b-41d4-a716-446
       "last_status": 200,
       "last_seen_at": "2023-01-15T10:35:20Z"
     }
-  ],
-  "total_count": 1,
-  "limit": 50,
-  "offset": 0
+  ]
 }
 ```
 
@@ -510,7 +507,7 @@ Process health check.
 **Response (200 OK):**
 ```json
 {
-  "status": "healthy"
+  "status": "ok"
 }
 ```
 
@@ -526,7 +523,7 @@ Readiness probe (based on queue saturation).
 Prometheus-format metrics.
 
 **Example Output:**
-```
+```text
 # HELP ingest_requests_total Total HTTP POST /v1/telemetry requests
 # TYPE ingest_requests_total counter
 ingest_requests_total{status="2xx"} 45000
