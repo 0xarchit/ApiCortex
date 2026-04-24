@@ -1,3 +1,9 @@
+"""
+Kafka consumer and producer for telemetry events and predictions.
+
+Handles decompression of telemetry batches (gzip/snappy), validation,
+schema mapping, alert publishing, and idempotent DLQ handling.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -21,12 +27,25 @@ class RetryableKafkaError(RuntimeError):
 
 @dataclass
 class DecodeResult:
+    """
+    Result of decoding a Kafka message into telemetry events.
+
+    Separates successfully validated events from invalid payloads,
+    allowing partial batch success with individual failure tracking.
+    """
     valid_events: list[TelemetryEvent]
     invalid_payloads: list[dict[str, Any]]
     payload_corruption_count: int
     
 
 class KafkaBatchConsumer:
+    """
+    Kafka consumer/producer for telemetry and alert message handling.
+
+    Subscribes to telemetry batches, decompresses and validates events,
+    publishes alerts and DLQ messages for invalid payloads. Tracks delivery
+    errors and lag for observability.
+    """
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._consumer = Consumer(settings.consumer_config)
@@ -47,6 +66,16 @@ class KafkaBatchConsumer:
             self._logger.error(error_msg)
 
     def poll_message(self, timeout_seconds: float) -> Message | None:
+        """
+        Poll for next message from telemetry topic.
+
+        Args:
+            timeout_seconds: Max time to wait for message availability.
+
+        Returns:
+            Kafka message or None if no message available. Raises RuntimeError
+            on fatal Kafka errors; raises RetryableKafkaError if topic is unavailable.
+        """
         message = self._consumer.poll(timeout_seconds)
         if message is None:
             return None
@@ -63,6 +92,19 @@ class KafkaBatchConsumer:
         return message
 
     def decode_message(self, message: Message) -> DecodeResult:
+        """
+        Decode and validate Kafka message containing telemetry batch.
+
+        Handles decompression (gzip/snappy), JSON parsing, and per-event
+        schema validation. Returns partial successes: valid events plus
+        invalid payloads with failure reasons.
+
+        Args:
+            message: Kafka message with gzip/snappy-compressed JSON array payload.
+
+        Returns:
+            DecodeResult with valid TelemetryEvent list and invalid payloads list.
+        """
         payload = message.value()
         if payload is None:
             return DecodeResult(valid_events=[], invalid_payloads=[], payload_corruption_count=0)
@@ -140,6 +182,12 @@ class KafkaBatchConsumer:
         return payload
 
     def lag_for_message(self, message: Message) -> int:
+        """
+        Get consumer lag (messages behind current high watermark) for this message.
+
+        Returns:
+            Number of messages between this offset and the latest offset (0 if at end).
+        """
         topic_partition = TopicPartition(message.topic(), message.partition())
         low, high = self._consumer.get_watermark_offsets(
             topic_partition,
@@ -149,6 +197,7 @@ class KafkaBatchConsumer:
         return max(0, high - message.offset() - 1)
 
     def commit_message(self, message: Message) -> None:
+        """Commit offset for message (synchronous, idempotent operation)."""
         self._consumer.commit(message=message, asynchronous=False)
 
     def publish_alert(self, alert: dict[str, Any], callback=None) -> None:
@@ -174,6 +223,12 @@ class KafkaBatchConsumer:
             raise
 
     def wait_for_pending_alerts(self, timeout_seconds: float = 5.0) -> bool:
+        """
+        Block until all pending alert deliveries complete or timeout expires.
+
+        Returns:
+            True if all alerts delivered, False if timeout occurred while pending.
+        """
         import time
         start_time = time.time()
         while (time.time() - start_time) < timeout_seconds:
@@ -192,6 +247,7 @@ class KafkaBatchConsumer:
         return True
 
     def get_and_clear_delivery_errors(self) -> list[str]:
+        """Retrieve accumulated delivery errors and reset the error list."""
         with self._delivery_lock:
             errors = self._delivery_errors.copy()
             self._delivery_errors.clear()
@@ -202,6 +258,15 @@ class KafkaBatchConsumer:
             return self._pending_deliveries
 
     def publish_invalid_payload(self, original_payload: Any, reason: str, source_topic: str, source_offset: int) -> None:
+        """
+        Publish invalid payload to DLQ topic for post-mortem investigation.
+
+        Args:
+            original_payload: The invalid payload that failed validation.
+            reason: Human-readable description of validation failure.
+            source_topic: Original topic the message came from.
+            source_offset: Original offset for traceability.
+        """
         dlq_topic = f"{source_topic}.dlq"
         dlq_message = {
             "source_topic": source_topic,
@@ -243,6 +308,7 @@ class KafkaBatchConsumer:
         self._producer.poll(0)
 
     def flush_producer(self, timeout_seconds: float = 5.0) -> None:
+        """Flush pending messages in producer queue, warning if timeout occurs."""
         remaining = self._producer.flush(timeout_seconds)
         if remaining > 0:
             self._logger.warning(
@@ -251,6 +317,7 @@ class KafkaBatchConsumer:
             )
 
     def close(self) -> None:
+        """Gracefully close consumer and producer connections, flushing pending messages."""
         pending = self.pending_deliveries()
         if pending > 0:
             self._logger.info(
