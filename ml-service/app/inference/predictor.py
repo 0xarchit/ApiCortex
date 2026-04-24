@@ -1,3 +1,9 @@
+"""
+Risk scoring inference engine.
+
+Generates API failure predictions with confidence scores and optional
+feature importance explanations using SHAP values.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -27,6 +33,15 @@ LEGACY_FALLBACK_FEATURES = [
 
 @dataclass
 class PredictionResult:
+    """
+    Result of a single API failure prediction.
+
+    Attributes:
+        risk_score: Probability of API failure (0.0 to 1.0).
+        prediction: Human-readable risk category (normal/degraded/high_failure_risk).
+        confidence: How certain the prediction is (0.5 to 1.0).
+        top_features: Most impactful features for this prediction (if SHAP enabled).
+    """
     risk_score: float
     prediction: str
     confidence: float
@@ -34,7 +49,20 @@ class PredictionResult:
 
 
 class Predictor:
+    """
+    Wrapper around trained XGBoost model for failure risk inference.
+
+    Handles feature ordering, probability normalization, confidence calculation,
+    and optional SHAP-based feature importance explanation.
+    """
     def __init__(self, model: Any, explainer: ShapExplainer | None = None) -> None:
+        """
+        Initialize predictor with trained model and optional explainer.
+
+        Args:
+            model: Trained XGBoost model with predict_proba method.
+            explainer: Optional ShapExplainer for feature importance (if None, no explanations).
+        """
         self._model = model
         self._explainer = explainer
         model_features = getattr(model, "feature_names_in_", None)
@@ -55,6 +83,17 @@ class Predictor:
         explain: bool = True,
         explain_min_risk: float = 0.0,
     ) -> PredictionResult:
+        """
+        Generate failure risk prediction for given features.
+
+        Args:
+            features: Dict mapping feature names to float values.
+            explain: Whether to compute SHAP explanations (if enabled).
+            explain_min_risk: Minimum risk score to trigger explanation.
+
+        Returns:
+            PredictionResult with risk_score, prediction category, confidence, and optional top_features.
+        """
         frame = pd.DataFrame([{name: float(features.get(name, 0.0)) for name in self._feature_order}])
 
         risk_score = self._predict_probability(frame)
@@ -73,6 +112,12 @@ class Predictor:
         )
 
     def _predict_probability(self, frame: pd.DataFrame) -> float:
+        """
+        Extract failure probability from model output, handling both classification modes.
+
+        Returns:
+            Probability value clipped to [0.0, 1.0] range.
+        """
         if hasattr(self._model, "predict_proba"):
             output = self._model.predict_proba(frame)
             probability = float(output[0][1])
@@ -83,6 +128,15 @@ class Predictor:
 
     @staticmethod
     def _label_for_score(score: float) -> str:
+        """
+        Map probability score to human-readable risk category.
+
+        Args:
+            score: Probability value [0.0, 1.0].
+
+        Returns:
+            One of: 'normal' (< 0.4), 'degraded' (0.4-0.7), 'high_failure_risk' (>= 0.7).
+        """
         if score < 0.4:
             return "normal"
         if score < 0.7:
