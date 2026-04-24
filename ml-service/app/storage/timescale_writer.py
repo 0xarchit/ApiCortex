@@ -57,7 +57,8 @@ class TimescaleWriter:
 
     Creates hypertable on first instantiation with idempotent upsert logic
     based on (org_id, api_id, endpoint, method, time) conflict key.
-    Buckets time to nearest minute to handle late/duplicate deliveries.
+    Timestamps are rounded down to the start of the minute by _bucket_time
+    to handle late/duplicate deliveries.
     """
     def __init__(self, settings: Settings) -> None:
         """

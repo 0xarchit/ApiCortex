@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+"""
+Main inference worker loop for API failure prediction.
+
+Consumes telemetry events from Kafka, performs feature engineering and model inference,
+persists predictions to TimescaleDB, and publishes alerts. Handles graceful shutdown
+and periodic checkpointing for state recovery.
+"""
+
 import asyncio
 import hashlib
 import json
@@ -10,13 +18,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
-"""
-Main inference worker loop for API failure prediction.
-
-Consumes telemetry events from Kafka, performs feature engineering and model inference,
-persists predictions to TimescaleDB, and publishes alerts. Handles graceful shutdown
-and periodic checkpointing for state recovery.
-"""
 from pathlib import Path
 from typing import Any, Callable
 
