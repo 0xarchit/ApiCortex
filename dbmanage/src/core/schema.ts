@@ -98,6 +98,10 @@ export const endpoints = pgTable(
     path: varchar("path", { length: 1024 }).notNull(),
     method: varchar("method", { length: 16 }).notNull(),
     monitoringEnabled: boolean("monitoring_enabled").notNull().default(true),
+    consecutiveErrorCount: integer("consecutive_error_count")
+      .notNull()
+      .default(0),
+    autoPaused: boolean("auto_paused").notNull().default(false),
     pollIntervalSeconds: integer("poll_interval_seconds"),
     timeoutMs: integer("timeout_ms"),
     pollHeadersJson: jsonb("poll_headers_json"),
@@ -208,5 +212,30 @@ export const jobs = pgTable(
   },
   (table) => ({
     orgIdx: index("ix_jobs_org_id").on(table.orgId),
+  }),
+);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 255 }).notNull(),
+    message: varchar("message", { length: 2048 }).notNull(),
+    severity: varchar("severity", { length: 16 }).notNull().default("info"),
+    source: varchar("source", { length: 64 }).notNull().default("system"),
+    metadata: jsonb("metadata"),
+    isRead: boolean("is_read").notNull().default(false),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    orgIdx: index("ix_notifications_org_id").on(table.orgId),
+    unreadIdx: index("ix_notifications_is_read").on(table.isRead),
+    createdIdx: index("ix_notifications_created_at").on(table.createdAt),
   }),
 );

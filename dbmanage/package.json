@@ -7,11 +7,13 @@
     "db:generate:core": "drizzle-kit generate --config=drizzle.core.config.ts",
     "db:push:core": "drizzle-kit push --config=drizzle.core.config.ts",
     "db:migrate:core": "drizzle-kit migrate --config=drizzle.core.config.ts",
+    "db:sync:core": "bun run db:push:core",
     "db:generate:timescale": "drizzle-kit generate --config=drizzle.timescale.config.ts",
     "db:push:timescale": "drizzle-kit push --config=drizzle.timescale.config.ts",
     "db:migrate:timescale": "drizzle-kit migrate --config=drizzle.timescale.config.ts",
     "db:hypertable:timescale": "bun run src/timescale/ensureHypertable.ts",
     "db:sync:timescale": "bun run db:push:timescale; bun run db:hypertable:timescale",
+    "db:sync": "bun run db:sync:core; bun run db:sync:timescale",
     "db:inspect:timescale": "bun run src/timescale/inspect.ts",
     "db:studio:core": "drizzle-kit studio --config=drizzle.core.config.ts",
     "db:studio:timescale": "drizzle-kit studio --config=drizzle.timescale.config.ts"

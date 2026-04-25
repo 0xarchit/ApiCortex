@@ -19,6 +19,8 @@ class Endpoint(Base):
 	path: Mapped[str] = mapped_column(String(1024), nullable=False)
 	method: Mapped[str] = mapped_column(String(16), nullable=False)
 	monitoring_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true", default=True)
+	consecutive_error_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
+	auto_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
 	poll_interval_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
 	timeout_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
 	poll_headers_json: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)

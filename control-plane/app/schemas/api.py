@@ -112,3 +112,20 @@ class DashboardSummaryOut(BaseModel):
     p95_latency_ms: float
     error_rate: float
     request_count: int
+
+
+class DashboardNotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    title: str
+    message: str
+    severity: str
+    source: str
+    is_read: bool
+    read_at: datetime | None = None
+    created_at: datetime
+
+
+class DashboardNotificationReadAllOut(BaseModel):
+    updated: int

@@ -25,6 +25,7 @@ bun install
 bun run db:generate:core
 bun run db:push:core
 bun run db:migrate:core
+bun run db:sync:core
 bun run db:studio:core
 ```
 
@@ -38,6 +39,18 @@ bun run db:hypertable:timescale
 bun run db:sync:timescale
 bun run db:inspect:timescale
 bun run db:studio:timescale
+
+## Full Sync
+
+```bash
+bun run db:sync
+```
+
+From repository root on Windows PowerShell:
+
+```powershell
+./scripts/db-sync.ps1
+```
 ```
 
 ## Notes

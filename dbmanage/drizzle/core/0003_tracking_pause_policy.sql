@@ -1,0 +1,2 @@
+ALTER TABLE "endpoints" ADD COLUMN IF NOT EXISTS "consecutive_error_count" integer NOT NULL DEFAULT 0;--> statement-breakpoint
+ALTER TABLE "endpoints" ADD COLUMN IF NOT EXISTS "auto_paused" boolean NOT NULL DEFAULT false;

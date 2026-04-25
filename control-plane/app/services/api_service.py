@@ -27,7 +27,7 @@ class APIService:
 
     @staticmethod
     def create_api(db: Session, org_id: uuid.UUID, payload: APICreate) -> API:
-        """Create a new API and default root endpoint.
+        """Create a new API.
         
         Args:
             db: Database session.
@@ -39,16 +39,6 @@ class APIService:
         """
         api = API(org_id=org_id, name=payload.name, base_url=str(payload.base_url))
         db.add(api)
-        db.flush()
-
-        endpoint = Endpoint(
-            api_id=api.id,
-            org_id=org_id,
-            path="/",
-            method="GET",
-            monitoring_enabled=True,
-        )
-        db.add(endpoint)
 
         db.commit()
         db.refresh(api)

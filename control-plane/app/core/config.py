@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     )
 
     rate_limit_per_minute: int = Field(default=120, validation_alias="RATE_LIMIT_PER_MINUTE")
+    tracking_error_pause_threshold: int = Field(default=5, validation_alias="TRACKING_ERROR_PAUSE_THRESHOLD")
 
     oauth_google_client_id: str = Field(default="", validation_alias="OAUTH_GOOGLE_CLIENT_ID")
     oauth_google_client_secret: str = Field(default="", validation_alias="OAUTH_GOOGLE_CLIENT_SECRET")

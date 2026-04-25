@@ -6,6 +6,9 @@ import {
   User,
   Settings,
   LogOut,
+  CircleCheck,
+  TriangleAlert,
+  Info,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -23,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
 import type {
   AuthSession,
+  DashboardNotification,
   Organization,
   User as AppUser,
 } from "@/lib/api-types";
@@ -37,6 +41,24 @@ export function Topbar() {
   const [profile, setProfile] = useState<AppUser | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [session, setSession] = useState<AuthSession | null>(null);
+  const [notifications, setNotifications] = useState<DashboardNotification[]>(
+    [],
+  );
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+
+  const loadNotifications = async () => {
+    setNotificationsLoading(true);
+    try {
+      const res = await apiClient.get<DashboardNotification[]>(
+        "/dashboard/notifications?limit=12",
+      );
+      setNotifications(res.data);
+    } catch {
+      setNotifications([]);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -63,10 +85,71 @@ export function Topbar() {
       }
     };
     void loadIdentity();
+    void loadNotifications();
+    const timer = window.setInterval(() => {
+      void loadNotifications();
+    }, 20000);
     return () => {
       mounted = false;
+      window.clearInterval(timer);
     };
   }, []);
+
+  const unreadCount = useMemo(
+    () => notifications.filter((item) => !item.is_read).length,
+    [notifications],
+  );
+
+  const markNotificationAsRead = async (id: string) => {
+    const target = notifications.find((item) => item.id === id);
+    if (!target || target.is_read) {
+      return;
+    }
+    try {
+      await apiClient.post(`/dashboard/notifications/${id}/read`);
+      setNotifications((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? { ...item, is_read: true, read_at: new Date().toISOString() }
+            : item,
+        ),
+      );
+    } catch {}
+  };
+
+  const markAllNotificationsRead = async () => {
+    if (unreadCount === 0) {
+      return;
+    }
+    try {
+      await apiClient.post("/dashboard/notifications/read-all");
+      setNotifications((prev) =>
+        prev.map((item) => ({
+          ...item,
+          is_read: true,
+          read_at: item.read_at ?? new Date().toISOString(),
+        })),
+      );
+    } catch {}
+  };
+
+  const formatNotificationTime = (iso: string) => {
+    const dt = new Date(iso);
+    if (Number.isNaN(dt.getTime())) {
+      return "now";
+    }
+    return dt.toLocaleString();
+  };
+
+  const severityIcon = (severity: DashboardNotification["severity"]) => {
+    if (severity === "warning" || severity === "critical") {
+      return <TriangleAlert className="w-4 h-4 text-[#F5B74F]" />;
+    }
+    if (severity === "success") {
+      return <CircleCheck className="w-4 h-4 text-[#00C2A8]" />;
+    }
+    return <Info className="w-4 h-4 text-[#3A8DFF]" />;
+  };
 
   const displayName = profile?.name?.trim() || "User";
   const displayEmail = profile?.email?.trim() || "No email";
@@ -141,10 +224,72 @@ export function Topbar() {
           <ChevronDown className="w-4 h-4 text-[#9AA3B2]" />
         </div>
         <div className="flex items-center gap-4 border-l border-[#242938] pl-5">
-          <button className="relative text-[#9AA3B2] hover:text-[#E6EAF2] transition-colors rounded-full p-1 hover:bg-[#161A23]">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-0.5 right-1 w-2 h-2 bg-[#FF5C5C] rounded-full border border-[#0F1117]"></span>
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="relative text-[#9AA3B2] hover:text-[#E6EAF2] transition-colors rounded-full p-1 hover:bg-[#161A23] outline-none">
+              <Bell className="w-5 h-5" />
+              {unreadCount > 0 ? (
+                <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-[#FF5C5C] text-[10px] leading-4 text-white border border-[#0F1117]">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              ) : null}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-95 max-w-[92vw] bg-[#161A23] border-[#242938] text-[#E6EAF2] rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] p-0 overflow-hidden"
+            >
+              <div className="flex items-center justify-between px-3 py-2 border-b border-[#242938]">
+                <span className="text-sm font-semibold">Notifications</span>
+                <button
+                  className="text-xs text-[#9AA3B2] hover:text-[#E6EAF2] disabled:opacity-50"
+                  onClick={markAllNotificationsRead}
+                  disabled={unreadCount === 0}
+                >
+                  Mark all read
+                </button>
+              </div>
+              <div className="max-h-96 overflow-y-auto">
+                {notificationsLoading ? (
+                  <div className="px-3 py-6 text-center text-sm text-[#9AA3B2]">
+                    Loading notifications...
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="px-3 py-6 text-center text-sm text-[#9AA3B2]">
+                    No notifications yet.
+                  </div>
+                ) : (
+                  notifications.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => markNotificationAsRead(item.id)}
+                      className={`w-full text-left px-3 py-3 border-b border-[#242938] last:border-b-0 hover:bg-[#1B2030] transition-colors ${item.is_read ? "opacity-70" : ""}`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <div className="mt-0.5 shrink-0">
+                          {severityIcon(item.severity)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-[#E6EAF2] truncate">
+                              {item.title}
+                            </p>
+                            {!item.is_read ? (
+                              <span className="w-2 h-2 rounded-full bg-[#5B5DFF] shrink-0" />
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-[#9AA3B2] mt-0.5 wrap-break-word whitespace-pre-wrap">
+                            {item.message}
+                          </p>
+                          <p className="text-[10px] text-[#7B8497] mt-1">
+                            {formatNotificationTime(item.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <DropdownMenu>
             <DropdownMenuTrigger className="outline-none">
               <Avatar className="w-8 h-8 cursor-pointer ring-2 ring-transparent hover:ring-[#5B5DFF] transition-all">

@@ -288,7 +288,18 @@ export default function DomainDetailsPage() {
                             <Edit2 className="w-4 h-4 text-[#F5B74F]" /> Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => router.push("/testing")}
+                            onClick={() => {
+                              const cleanBase = (
+                                domain?.base_url || ""
+                              ).replace(/\/$/, "");
+                              const cleanPath = ep.path.replace(/^\//, "");
+                              const targetUrl = cleanBase
+                                ? `${cleanBase}/${cleanPath}`
+                                : ep.path;
+                              router.push(
+                                `/testing?protocol=http&method=${encodeURIComponent(ep.method)}&url=${encodeURIComponent(targetUrl)}`,
+                              );
+                            }}
                             className="focus:bg-[#242938] focus:text-[#E6EAF2] cursor-pointer flex items-center gap-2"
                           >
                             <ExternalLink className="w-4 h-4 text-[#3A8DFF]" />{" "}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,7 @@ import {
   ExecuteResponse,
 } from "@/lib/api-types";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 type TestResponseState = {
   status: number;
@@ -55,12 +57,35 @@ type TestResponseState = {
   timedOut: boolean | null;
 };
 
+type HeaderRow = {
+  id: string;
+  enabled: boolean;
+  key: string;
+  value: string;
+};
+
+const MAX_ERROR_TEXT_LENGTH = 320;
+
+const toSafeMessage = (value: unknown) => {
+  const normalized = String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) {
+    return "Request failed.";
+  }
+  if (normalized.length <= MAX_ERROR_TEXT_LENGTH) {
+    return normalized;
+  }
+  return `${normalized.slice(0, MAX_ERROR_TEXT_LENGTH)}...`;
+};
+
 export default function TestingPage() {
+  const searchParams = useSearchParams();
   const [protocol, setProtocol] = useState<"http" | "graphql" | "websocket">(
     "http",
   );
   const [method, setMethod] = useState("GET");
-  const [url, setUrl] = useState("https://api.acme.com/users/");
+  const [url, setUrl] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [response, setResponse] = useState<TestResponseState | null>(null);
   const [activeEndpoint, setActiveEndpoint] = useState<Endpoint | null>(null);
@@ -68,9 +93,13 @@ export default function TestingPage() {
   const [expandedCollections, setExpandedCollections] = useState<
     Record<string, boolean>
   >({});
-  const [requestBody, setRequestBody] = useState(
-    '{\n  "limit": 100,\n  "status": "active"\n}',
+  const [requestBody, setRequestBody] = useState("");
+  const [bodyMode, setBodyMode] = useState<"none" | "json" | "text" | "xml">(
+    "none",
   );
+  const [headerRows, setHeaderRows] = useState<HeaderRow[]>([
+    { id: crypto.randomUUID(), enabled: true, key: "", value: "" },
+  ]);
 
   const domainsQuery = useQuery({
     queryKey: ["testing-domains"],
@@ -136,10 +165,102 @@ export default function TestingPage() {
         return "text-[#FF5C5C]";
       case "PATCH":
         return "text-[#3A8DFF]";
+      case "HEAD":
+        return "text-[#8B5CF6]";
+      case "OPTIONS":
+        return "text-[#14B8A6]";
       default:
         return "text-[#E6EAF2]";
     }
   };
+
+  useEffect(() => {
+    const qpUrl = searchParams.get("url");
+    const qpMethod = searchParams.get("method");
+    const qpProtocol = searchParams.get("protocol");
+
+    if (qpUrl) {
+      setUrl(qpUrl);
+    }
+    if (qpMethod) {
+      setMethod(qpMethod.toUpperCase());
+    }
+    if (
+      qpProtocol === "http" ||
+      qpProtocol === "graphql" ||
+      qpProtocol === "websocket"
+    ) {
+      setProtocol(qpProtocol);
+    }
+  }, [searchParams]);
+
+  const addHeaderRow = () => {
+    setHeaderRows((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), enabled: true, key: "", value: "" },
+    ]);
+  };
+
+  const removeHeaderRow = (id: string) => {
+    setHeaderRows((prev) => {
+      const next = prev.filter((row) => row.id !== id);
+      if (next.length > 0) {
+        return next;
+      }
+      return [{ id: crypto.randomUUID(), enabled: true, key: "", value: "" }];
+    });
+  };
+
+  const updateHeaderRow = (
+    id: string,
+    field: "enabled" | "key" | "value",
+    value: boolean | string,
+  ) => {
+    setHeaderRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== id) {
+          return row;
+        }
+        return { ...row, [field]: value };
+      }),
+    );
+  };
+
+  const normalizedHeaders = useMemo(() => {
+    const entries = headerRows
+      .filter((row) => row.enabled)
+      .map((row) => ({ key: row.key.trim(), value: row.value.trim() }))
+      .filter((row) => row.key.length > 0);
+
+    const out: Record<string, string> = {};
+    for (const row of entries) {
+      out[row.key] = row.value;
+    }
+    return out;
+  }, [headerRows]);
+
+  const headersWithBodyMode = useMemo(() => {
+    const hasContentType = Object.keys(normalizedHeaders).some(
+      (key) => key.toLowerCase() === "content-type",
+    );
+    if (hasContentType || bodyMode === "none") {
+      return normalizedHeaders;
+    }
+    if (bodyMode === "json") {
+      return { ...normalizedHeaders, "Content-Type": "application/json" };
+    }
+    if (bodyMode === "xml") {
+      return { ...normalizedHeaders, "Content-Type": "application/xml" };
+    }
+    return { ...normalizedHeaders, "Content-Type": "text/plain" };
+  }, [normalizedHeaders, bodyMode]);
+
+  const enabledHeaderCount = useMemo(
+    () =>
+      headerRows.filter((row) => row.enabled && row.key.trim().length > 0)
+        .length,
+    [headerRows],
+  );
 
   const handleSend = async () => {
     setIsSending(true);
@@ -148,15 +269,10 @@ export default function TestingPage() {
       let parsedBody: unknown = null;
       if (
         protocol !== "websocket" &&
-        method !== "GET" &&
-        method !== "DELETE" &&
-        requestBody
+        bodyMode !== "none" &&
+        requestBody.length > 0
       ) {
-        try {
-          parsedBody = JSON.parse(requestBody);
-        } catch {
-          parsedBody = requestBody;
-        }
+        parsedBody = requestBody;
       }
 
       const payload: ExecuteRequest = {
@@ -164,9 +280,7 @@ export default function TestingPage() {
         protocol,
         url,
         method: protocol === "websocket" ? undefined : method,
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: headersWithBodyMode,
         body: parsedBody,
         follow_redirects: true,
         timeout_ms: 30000,
@@ -177,6 +291,18 @@ export default function TestingPage() {
         payload,
       );
       const executeData = res.data;
+      const safeErrorMessage = toSafeMessage(executeData.error);
+
+      if (!executeData.success && executeData.error) {
+        toast.error(safeErrorMessage);
+      }
+      if (executeData.notification) {
+        if (executeData.tracking_paused) {
+          toast.warning(toSafeMessage(executeData.notification));
+        } else {
+          toast.info(toSafeMessage(executeData.notification));
+        }
+      }
 
       let nextStatus = executeData.success ? 200 : 500;
       let nextTime = "n/a";
@@ -233,6 +359,7 @@ export default function TestingPage() {
         typeof rawData === "object"
           ? JSON.stringify(rawData, null, 2)
           : String(rawData);
+      toast.error(toSafeMessage(respDataStr));
       setResponse({
         status: status,
         time: `error`,
@@ -254,8 +381,8 @@ export default function TestingPage() {
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col">
-      <div className="flex-1 w-full flex rounded-2xl border border-[#242938] overflow-hidden shadow-2xl">
-        <div className="w-[280px] shrink-0 border-r border-[#242938] bg-[#0F1117]">
+      <div className="flex-1 w-full flex flex-col 2xl:flex-row rounded-2xl border border-[#242938] overflow-hidden shadow-2xl">
+        <div className="w-full 2xl:w-70 shrink-0 border-b 2xl:border-b-0 2xl:border-r border-[#242938] bg-[#0F1117] max-h-64 2xl:max-h-none">
           <div className="p-4 h-full flex flex-col min-w-0">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-[#E6EAF2] uppercase tracking-wider truncate">
@@ -314,7 +441,7 @@ export default function TestingPage() {
             </div>
           </div>
         </div>
-        <div className="flex-1 flex flex-col bg-[#161A23] min-w-0">
+        <div className="flex-1 flex flex-col bg-[#161A23] min-w-0 min-h-[50vh] 2xl:min-h-0">
           <div className="p-4 border-b border-[#242938] flex gap-2 items-center bg-[#0F1117]/50 overflow-x-auto hidden-scrollbar">
             <Select
               value={protocol}
@@ -362,17 +489,26 @@ export default function TestingPage() {
                 <SelectItem value="DELETE" className="text-[#FF5C5C] font-bold">
                   DELETE
                 </SelectItem>
+                <SelectItem value="HEAD" className="text-[#8B5CF6] font-bold">
+                  HEAD
+                </SelectItem>
+                <SelectItem
+                  value="OPTIONS"
+                  className="text-[#14B8A6] font-bold"
+                >
+                  OPTIONS
+                </SelectItem>
               </SelectContent>
             </Select>
             <Input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              className="flex-1 min-w-[100px] bg-[#161A23] border-[#242938] text-[#E6EAF2] font-mono focus-visible:ring-[#5B5DFF]"
+              className="flex-1 min-w-25 bg-[#161A23] border-[#242938] text-[#E6EAF2] font-mono focus-visible:ring-[#5B5DFF]"
             />
             <Button
               onClick={handleSend}
               disabled={isSending}
-              className="shrink-0 bg-[#5B5DFF] hover:bg-[#5B5DFF]/90 text-white gap-2 font-medium shadow-[0_0_15px_rgba(91,93,255,0.4)] transition-all min-w-[90px]"
+              className="shrink-0 bg-[#5B5DFF] hover:bg-[#5B5DFF]/90 text-white gap-2 font-medium shadow-[0_0_15px_rgba(91,93,255,0.4)] transition-all min-w-22.5"
             >
               {isSending ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -409,7 +545,7 @@ export default function TestingPage() {
                       variant="secondary"
                       className="ml-2 bg-[#242938] text-xs px-1.5 h-4"
                     >
-                      2
+                      {enabledHeaderCount}
                     </Badge>
                   </TabsTrigger>
                   <TabsTrigger
@@ -430,70 +566,63 @@ export default function TestingPage() {
                 value="headers"
                 className="flex-1 p-0 m-0 border-none outline-none overflow-auto"
               >
-                <div className="w-full min-w-[400px]">
+                <div className="w-full min-w-0">
                   <div className="grid grid-cols-[30px_1fr_1fr_30px] border-b border-[#242938] bg-[#0F1117]/50 text-xs text-[#9AA3B2] font-medium">
                     <div className="p-2 border-r border-[#242938] text-center"></div>
                     <div className="p-2 border-r border-[#242938]">Key</div>
                     <div className="p-2 border-r border-[#242938]">Value</div>
                     <div className="p-2"></div>
                   </div>
-                  <div className="grid grid-cols-[30px_1fr_1fr_30px] border-b border-[#242938] group">
-                    <div className="p-2 border-r border-[#242938] flex items-center justify-center">
+                  {headerRows.map((row) => (
+                    <div
+                      key={row.id}
+                      className="grid grid-cols-[30px_1fr_1fr_30px] border-b border-[#242938] group"
+                    >
+                      <div className="p-2 border-r border-[#242938] flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={row.enabled}
+                          onChange={(e) =>
+                            updateHeaderRow(row.id, "enabled", e.target.checked)
+                          }
+                          className="accent-[#5B5DFF]"
+                        />
+                      </div>
                       <input
-                        type="checkbox"
-                        defaultChecked
-                        className="accent-[#5B5DFF]"
+                        type="text"
+                        value={row.key}
+                        onChange={(e) =>
+                          updateHeaderRow(row.id, "key", e.target.value)
+                        }
+                        placeholder="Header name"
+                        className="p-2 border-r border-[#242938] bg-transparent text-[#E6EAF2] font-mono text-sm outline-none focus:bg-[#242938]/30 w-full"
                       />
-                    </div>
-                    <input
-                      type="text"
-                      defaultValue="Content-Type"
-                      className="p-2 border-r border-[#242938] bg-transparent text-[#E6EAF2] font-mono text-sm outline-none focus:bg-[#242938]/30 w-full"
-                    />
-                    <input
-                      type="text"
-                      defaultValue="application/json"
-                      className="p-2 border-r border-[#242938] bg-transparent text-[#E6EAF2] font-mono text-sm outline-none focus:bg-[#242938]/30 w-full"
-                    />
-                    <div className="p-2 flex items-center justify-center">
-                      <XCircle className="w-4 h-4 text-[#FF5C5C] opacity-0 group-hover:opacity-100 cursor-pointer" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-[30px_1fr_1fr_30px] border-b border-[#242938] group">
-                    <div className="p-2 border-r border-[#242938] flex items-center justify-center">
                       <input
-                        type="checkbox"
-                        defaultChecked
-                        className="accent-[#5B5DFF]"
+                        type="text"
+                        value={row.value}
+                        onChange={(e) =>
+                          updateHeaderRow(row.id, "value", e.target.value)
+                        }
+                        placeholder="Header value"
+                        className="p-2 border-r border-[#242938] bg-transparent text-[#E6EAF2] font-mono text-sm outline-none focus:bg-[#242938]/30 w-full"
                       />
+                      <div className="p-2 flex items-center justify-center">
+                        <XCircle
+                          className="w-4 h-4 text-[#FF5C5C] opacity-60 group-hover:opacity-100 cursor-pointer"
+                          onClick={() => removeHeaderRow(row.id)}
+                        />
+                      </div>
                     </div>
-                    <input
-                      type="text"
-                      defaultValue="Authorization"
-                      className="p-2 border-r border-[#242938] bg-transparent text-[#E6EAF2] font-mono text-sm outline-none focus:bg-[#242938]/30 w-full"
-                    />
-                    <input
-                      type="text"
-                      defaultValue="Bearer eyJhbGc..."
-                      className="p-2 border-r border-[#242938] bg-transparent text-[#E6EAF2] font-mono text-sm outline-none focus:bg-[#242938]/30 w-full text-ellipsis"
-                    />
-                    <div className="p-2 flex items-center justify-center">
-                      <XCircle className="w-4 h-4 text-[#FF5C5C] opacity-0 group-hover:opacity-100 cursor-pointer" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-[30px_1fr_1fr_30px] border-b border-[#242938]">
-                    <div className="p-2 border-r border-[#242938]"></div>
-                    <input
-                      type="text"
-                      placeholder="Key"
-                      className="p-2 border-r border-[#242938] bg-transparent text-[#9AA3B2] placeholder:text-[#9AA3B2]/50 font-mono text-sm outline-none focus:bg-[#242938]/30 w-full"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Value"
-                      className="p-2 border-r border-[#242938] bg-transparent text-[#9AA3B2] placeholder:text-[#9AA3B2]/50 font-mono text-sm outline-none focus:bg-[#242938]/30 w-full"
-                    />
-                    <div className="p-2"></div>
+                  ))}
+                  <div className="p-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-[#242938] text-[#9AA3B2] hover:text-[#E6EAF2] hover:bg-[#242938]"
+                      onClick={addHeaderRow}
+                    >
+                      Add Header
+                    </Button>
                   </div>
                 </div>
               </TabsContent>
@@ -502,11 +631,19 @@ export default function TestingPage() {
                 className="flex-1 p-0 m-0 border-none outline-none relative bg-[#0F1117]/80"
               >
                 <div className="absolute top-2 right-4 z-10">
-                  <Select defaultValue="json">
+                  <Select
+                    value={bodyMode}
+                    onValueChange={(val) =>
+                      setBodyMode(
+                        (val as "none" | "json" | "text" | "xml") || "none",
+                      )
+                    }
+                  >
                     <SelectTrigger className="h-7 text-xs bg-[#242938] border-[#242938] text-[#E6EAF2] rounded-md">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-[#161A23] border-[#242938] text-[#E6EAF2]">
+                      <SelectItem value="none">None</SelectItem>
                       <SelectItem value="json">JSON</SelectItem>
                       <SelectItem value="text">Text</SelectItem>
                       <SelectItem value="xml">XML</SelectItem>
@@ -519,6 +656,7 @@ export default function TestingPage() {
                   spellCheck="false"
                   value={requestBody}
                   onChange={(e) => setRequestBody(e.target.value)}
+                  disabled={bodyMode === "none" || protocol === "websocket"}
                 />
               </TabsContent>
               <TabsContent
@@ -536,7 +674,7 @@ export default function TestingPage() {
             </Tabs>
           </div>
         </div>
-        <div className="w-[35%] min-w-[300px] shrink-0 bg-[#0F1117] border-l border-[#242938] flex flex-col relative">
+        <div className="w-full 2xl:w-[35%] 2xl:min-w-75 shrink-0 bg-[#0F1117] border-t 2xl:border-t-0 2xl:border-l border-[#242938] flex flex-col relative min-h-[40vh] 2xl:min-h-0 min-w-0 overflow-hidden">
           {response ? (
             <>
               <div className="p-3 border-b border-[#242938] flex items-center gap-4 bg-[#161A23]/50 overflow-x-auto hidden-scrollbar">
@@ -570,25 +708,25 @@ export default function TestingPage() {
                   </span>
                 </div>
               </div>
-              <div className="bg-[#161A23] border-b border-[#242938] px-4 py-2 flex items-center justify-between">
-                <div className="flex items-center gap-2 truncate">
+              <div className="bg-[#161A23] border-b border-[#242938] px-4 py-2 flex items-center justify-between gap-3 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
                   {response.success ? (
                     <>
                       <CheckCircle2 className="w-4 h-4 shrink-0 text-[#2ED573]" />
-                      <span className="text-sm font-medium text-[#E6EAF2] truncate">
+                      <span className="text-sm font-medium text-[#E6EAF2] truncate min-w-0">
                         Execution Succeeded
                       </span>
                     </>
                   ) : (
                     <>
                       <AlertTriangle className="w-4 h-4 shrink-0 text-[#F5B74F]" />
-                      <span className="text-sm font-medium text-[#F5B74F] truncate">
-                        {response.error || "Execution Failed"}
+                      <span className="text-sm font-medium text-[#F5B74F] wrap-break-word whitespace-pre-wrap max-w-full">
+                        {toSafeMessage(response.error || "Execution Failed")}
                       </span>
                     </>
                   )}
                 </div>
-                <div className="text-[11px] text-[#9AA3B2] truncate max-w-[45%] text-right">
+                <div className="text-[11px] text-[#9AA3B2] break-all max-w-[45%] text-right shrink-0">
                   {response.protocol.toUpperCase()}
                   {response.testId ? ` | ${response.testId}` : ""}
                 </div>
@@ -627,7 +765,7 @@ export default function TestingPage() {
                     </Button>
                   </div>
                   {response.body ? (
-                    <pre className="p-4 font-mono text-sm leading-relaxed overflow-auto h-full text-[#E6EAF2]">
+                    <pre className="p-4 font-mono text-sm leading-relaxed overflow-auto h-full text-[#E6EAF2] whitespace-pre-wrap wrap-break-word min-w-0">
                       <code>{response.body}</code>
                     </pre>
                   ) : (
@@ -644,7 +782,7 @@ export default function TestingPage() {
                     <span>No headers available.</span>
                   ) : (
                     Object.entries(response.headers).map(([key, value]) => (
-                      <div key={key}>
+                      <div key={key} className="break-all">
                         {key}: {value}
                       </div>
                     ))
@@ -707,7 +845,7 @@ export default function TestingPage() {
               </Tabs>
             </>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-[#9AA3B2] p-8 text-center bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#161A23] to-[#0F1117] min-w-0 overflow-hidden">
+            <div className="h-full flex flex-col items-center justify-center text-[#9AA3B2] p-8 text-center bg-[radial-gradient(ellipse_at_center,var(--tw-gradient-stops))] from-[#161A23] to-[#0F1117] min-w-0 overflow-hidden">
               <div className="w-16 h-16 mb-4 rounded-2xl bg-[#242938]/50 flex items-center justify-center shrink-0">
                 <TerminalSquare className="w-8 h-8 text-[#5B5DFF]/50" />
               </div>

@@ -18,6 +18,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.api import API
+from app.models.endpoint import Endpoint
+from app.models.notification import Notification
 from app.schemas.testing import TestRequest, TestResponse, ExecuteRequest, ExecuteResponse
 from app.services.contract_service import ContractService
 
@@ -113,6 +115,88 @@ def _resolve_outbound_target(raw_url: str, allowed_base_urls: list[str]) -> tupl
     return _origin_base_url(scheme, host, port), relative_url, query_params
 
 
+def _match_endpoint_for_tracking(db: Session, org_id: uuid.UUID, payload: ExecuteRequest) -> Endpoint | None:
+    if payload.protocol not in {"http", "graphql"}:
+        return None
+
+    try:
+        target = urlsplit(payload.url)
+        target_origin = _normalized_origin(payload.url)
+    except Exception:
+        return None
+
+    normalized_method = (payload.method or ("POST" if payload.protocol == "graphql" else "GET")).upper()
+    normalized_path = _sanitize_relative_path(target.path or "/")
+
+    api_rows = list(db.scalars(select(API).where(API.org_id == org_id)).all())
+    matched_api_ids: list[uuid.UUID] = []
+    for api in api_rows:
+        try:
+            if _normalized_origin(str(api.base_url)) == target_origin:
+                matched_api_ids.append(api.id)
+        except Exception:
+            continue
+
+    if not matched_api_ids:
+        return None
+
+    endpoint = db.scalar(
+        select(Endpoint).where(
+            Endpoint.org_id == org_id,
+            Endpoint.api_id.in_(matched_api_ids),
+            Endpoint.path == normalized_path,
+            Endpoint.method == normalized_method,
+        )
+    )
+    return endpoint
+
+
+def _apply_tracking_failure_policy(
+    db: Session,
+    endpoint: Endpoint | None,
+    success: bool,
+    threshold: int,
+) -> tuple[bool, str | None]:
+    if endpoint is None:
+        return False, None
+
+    if success:
+        if endpoint.consecutive_error_count != 0 or endpoint.auto_paused:
+            endpoint.consecutive_error_count = 0
+            endpoint.auto_paused = False
+            db.add(endpoint)
+            db.commit()
+        return False, None
+
+    endpoint.consecutive_error_count = (endpoint.consecutive_error_count or 0) + 1
+    paused = False
+    notification = None
+    if endpoint.monitoring_enabled and endpoint.consecutive_error_count >= max(threshold, 1):
+        endpoint.monitoring_enabled = False
+        endpoint.auto_paused = True
+        paused = True
+        notification = f"Tracking paused for {endpoint.method} {endpoint.path} after repeated execution failures."
+        db.add(
+            Notification(
+                org_id=endpoint.org_id,
+                title="Tracking paused automatically",
+                message=notification,
+                severity="warning",
+                source="testing.execute",
+                extra_metadata={
+                    "endpoint_id": str(endpoint.id),
+                    "method": endpoint.method,
+                    "path": endpoint.path,
+                    "consecutive_error_count": endpoint.consecutive_error_count,
+                },
+            )
+        )
+
+    db.add(endpoint)
+    db.commit()
+    return paused, notification
+
+
 @router.post("/request", response_model=TestResponse)
 async def proxy_test_request(payload: TestRequest, request: Request, db: Session = Depends(get_db)):
     headers = payload.headers or {}
@@ -179,7 +263,7 @@ async def proxy_test_request(payload: TestRequest, request: Request, db: Session
 
 
 @router.post("/execute", response_model=ExecuteResponse)
-async def execute_test(payload: ExecuteRequest, request: Request):
+async def execute_test(payload: ExecuteRequest, request: Request, db: Session = Depends(get_db)):
     """Execute API test by proxying to the Rust executor service.
     
     Allows testing any public URL. SSRF protection is enforced in the Rust executor.
@@ -198,6 +282,13 @@ async def execute_test(payload: ExecuteRequest, request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
+        org_id = uuid.UUID(str(org_id_raw))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    tracked_endpoint = _match_endpoint_for_tracking(db, org_id, payload)
+
+    try:
         executor_url = f"{settings.api_testing_url.rstrip('/')}/v1/execute"
         timeout_s = min(max((payload.timeout_ms or 30000) / 1000.0, 1.0), 120.0)
         async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_s, connect=5.0)) as client:
@@ -210,22 +301,56 @@ async def execute_test(payload: ExecuteRequest, request: Request):
             if response.status_code == 200:
                 try:
                      data = response.json()
-                     return ExecuteResponse(**data)
+                     parsed = ExecuteResponse(**data)
+                     paused, notice = _apply_tracking_failure_policy(
+                         db,
+                         tracked_endpoint,
+                         parsed.success,
+                         settings.tracking_error_pause_threshold,
+                     )
+                     if notice:
+                         parsed.notification = notice
+                     parsed.tracking_paused = paused
+                     return parsed
                 except Exception as exc:
+                     paused, notice = _apply_tracking_failure_policy(
+                         db,
+                         tracked_endpoint,
+                         False,
+                         settings.tracking_error_pause_threshold,
+                     )
                      return ExecuteResponse(
                          test_id=payload.test_id,
                          success=False,
                          error=f"Invalid executor response: {exc!s}",
+                         notification=notice,
+                         tracking_paused=paused,
                     )
             else:
+                paused, notice = _apply_tracking_failure_policy(
+                    db,
+                    tracked_endpoint,
+                    False,
+                    settings.tracking_error_pause_threshold,
+                )
                 return ExecuteResponse(
                     test_id=payload.test_id,
                     success=False,
-                    error=f"Executor error: {response.text}"
+                    error=f"Executor error: {response.text}",
+                    notification=notice,
+                    tracking_paused=paused,
                 )
     except httpx.RequestError as exc:
+        paused, notice = _apply_tracking_failure_policy(
+            db,
+            tracked_endpoint,
+            False,
+            settings.tracking_error_pause_threshold,
+        )
         return ExecuteResponse(
             test_id=payload.test_id,
             success=False,
-            error=f"Executor connection error: {str(exc)}"
+            error=f"Executor connection error: {str(exc)}",
+            notification=notice,
+            tracking_paused=paused,
         )

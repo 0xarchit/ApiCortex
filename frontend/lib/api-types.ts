@@ -58,6 +58,17 @@ export interface DashboardMetrics {
   request_count: number;
 }
 
+export interface DashboardNotification {
+  id: string;
+  title: string;
+  message: string;
+  severity: "info" | "warning" | "critical" | "success";
+  source: string;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
+}
+
 /** Session claims used for role-aware UI and authorization decisions. */
 export interface AuthSession {
   user_id: string;
@@ -184,4 +195,6 @@ export interface ExecuteResponse {
   success: boolean;
   result?: ExecuteHttpResult | ExecuteWsResult;
   error?: string;
+  notification?: string;
+  tracking_paused?: boolean;
 }

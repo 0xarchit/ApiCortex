@@ -4,6 +4,7 @@ from app.models.endpoint import Endpoint
 from app.models.feature_flag import FeatureFlag
 from app.models.job import Job
 from app.models.membership import Membership
+from app.models.notification import Notification
 from app.models.openapi_spec import OpenAPISpec
 from app.models.organization import Organization
 from app.models.organization_ingest_key import OrganizationIngestKey

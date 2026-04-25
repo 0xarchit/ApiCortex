@@ -87,3 +87,5 @@ class ExecuteResponse(BaseModel):
     success: bool
     result: HttpResult | WsResult | None = None
     error: str | None = None
+    notification: str | None = None
+    tracking_paused: bool = False

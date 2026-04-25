@@ -1,8 +1,7 @@
 import axios from "axios";
 import { toast } from "sonner";
 
-const tunnelBaseURL =
-  process.env.NEXT_PUBLIC_TUNNEL_API_URL;
+const tunnelBaseURL = process.env.NEXT_PUBLIC_TUNNEL_API_URL;
 
 /**
  * Returns true when the hostname resolves to a loopback/local development host.
@@ -25,7 +24,9 @@ const isLocalHost = (hostname: string) => {
  * - Falls back to explicit API URL or localhost for local development.
  */
 const resolveBaseURL = () => {
-  const appEnv = (process.env.NEXT_PUBLIC_APP_ENV || "dev").trim().toLowerCase();
+  const appEnv = (process.env.NEXT_PUBLIC_APP_ENV || "dev")
+    .trim()
+    .toLowerCase();
 
   if (appEnv === "prod") {
     return "/api-proxy";
@@ -59,10 +60,51 @@ export const apiClient = axios.create({
 
 let refreshPromise: Promise<void> | null = null;
 
+const MAX_TOAST_MESSAGE_LENGTH = 260;
+
 const wait = (ms: number) =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
+
+const truncateForToast = (value: string) => {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= MAX_TOAST_MESSAGE_LENGTH) {
+    return normalized;
+  }
+  return `${normalized.slice(0, MAX_TOAST_MESSAGE_LENGTH)}...`;
+};
+
+const extractErrorMessage = (error: unknown) => {
+  const responseData = (error as { response?: { data?: unknown } })?.response
+    ?.data;
+
+  if (typeof responseData === "string") {
+    return truncateForToast(responseData);
+  }
+
+  if (responseData && typeof responseData === "object") {
+    const candidate = responseData as {
+      detail?: unknown;
+      error?: unknown;
+      message?: unknown;
+    };
+    const primary = candidate.detail ?? candidate.error ?? candidate.message;
+    if (typeof primary === "string") {
+      return truncateForToast(primary);
+    }
+    if (Array.isArray(primary)) {
+      return truncateForToast(primary.join("; "));
+    }
+  }
+
+  const fallback = (error as { message?: unknown })?.message;
+  if (typeof fallback === "string" && fallback.trim().length > 0) {
+    return truncateForToast(fallback);
+  }
+
+  return "Request failed.";
+};
 
 /**
  * Clears auth cookies when the session is no longer valid.
@@ -178,14 +220,17 @@ apiClient.interceptors.response.use(
         window.location.href = "/login";
       }
     } else if (error.response?.status === 403) {
-      if (typeof window !== "undefined") toast.error("Permission denied.");
+      if (typeof window !== "undefined")
+        toast.error(extractErrorMessage(error));
     } else if (error.response?.status === 404) {
-      if (typeof window !== "undefined") toast.error("Resource not found.");
+      if (typeof window !== "undefined")
+        toast.error(extractErrorMessage(error));
     } else if (error.response?.status === 409) {
       if (typeof window !== "undefined")
-        toast.error("Conflict: duplicate resource.");
+        toast.error(extractErrorMessage(error));
     } else if (error.response?.status >= 500) {
-      if (typeof window !== "undefined") toast.error("Server error.");
+      if (typeof window !== "undefined")
+        toast.error(extractErrorMessage(error));
     }
     return Promise.reject(error);
   },
