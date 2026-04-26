@@ -28,6 +28,7 @@ http = "1"
 tokio-native-tls = "0.3"
 native-tls = "0.2"
 url = "2"
+socket2 = "0.5"
 
 [dev-dependencies]
 axum-test = "15"
