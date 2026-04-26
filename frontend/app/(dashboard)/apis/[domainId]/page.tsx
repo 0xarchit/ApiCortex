@@ -28,6 +28,8 @@ import {
   Trash2,
   Edit2,
   ArrowLeft,
+  PauseCircle,
+  PlayCircle,
 } from "lucide-react";
 import {
   Dialog,
@@ -190,6 +192,22 @@ export default function DomainDetailsPage() {
       console.error(error);
     }
   };
+
+  const handleSetTrackingState = async (
+    endpointId: string,
+    monitoringEnabled: boolean,
+  ) => {
+    try {
+      await apiClient.patch(`/endpoints/${endpointId}`, {
+        monitoring_enabled: monitoringEnabled,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["api-domain-endpoints", domainId],
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
   return (
     <div className="w-full space-y-6 flex flex-col h-[calc(100vh-8rem)]">
       <div className="flex items-center gap-4">
@@ -236,13 +254,16 @@ export default function DomainDetailsPage() {
           <Table>
             <TableHeader className="bg-[#0F1117] sticky top-0 z-10 border-b border-[#242938]">
               <TableRow className="hover:bg-transparent border-none">
-                <TableHead className="text-[#9AA3B2] font-medium h-12 w-[100px] pl-6">
+                <TableHead className="text-[#9AA3B2] font-medium h-12 w-25 pl-6">
                   Method
                 </TableHead>
                 <TableHead className="text-[#9AA3B2] font-medium h-12">
                   Path
                 </TableHead>
-                <TableHead className="text-[#9AA3B2] font-medium h-12 w-[80px]"></TableHead>
+                <TableHead className="text-[#9AA3B2] font-medium h-12 w-45">
+                  Tracking
+                </TableHead>
+                <TableHead className="text-[#9AA3B2] font-medium h-12 w-20"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -258,6 +279,21 @@ export default function DomainDetailsPage() {
                   </TableCell>
                   <TableCell className="text-[#9AA3B2] font-mono text-sm">
                     {ep.path}
+                  </TableCell>
+                  <TableCell>
+                    {ep.monitoring_enabled ? (
+                      <span className="inline-flex items-center rounded-full border border-[#00C2A8]/30 bg-[#00C2A8]/10 px-2 py-1 text-xs font-medium text-[#00C2A8]">
+                        Active
+                      </span>
+                    ) : ep.auto_paused ? (
+                      <span className="inline-flex items-center rounded-full border border-[#F5B74F]/30 bg-[#F5B74F]/10 px-2 py-1 text-xs font-medium text-[#F5B74F]">
+                        Auto-paused ({ep.consecutive_error_count})
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full border border-[#9AA3B2]/30 bg-[#9AA3B2]/10 px-2 py-1 text-xs font-medium text-[#9AA3B2]">
+                        Manually paused
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
@@ -305,6 +341,27 @@ export default function DomainDetailsPage() {
                             <ExternalLink className="w-4 h-4 text-[#3A8DFF]" />{" "}
                             Test Request
                           </DropdownMenuItem>
+                          {ep.monitoring_enabled ? (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleSetTrackingState(ep.id, false)
+                              }
+                              className="focus:bg-[#242938] focus:text-[#E6EAF2] cursor-pointer flex items-center gap-2"
+                            >
+                              <PauseCircle className="w-4 h-4 text-[#F5B74F]" />
+                              Pause Tracking
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleSetTrackingState(ep.id, true)
+                              }
+                              className="focus:bg-[#242938] focus:text-[#E6EAF2] cursor-pointer flex items-center gap-2"
+                            >
+                              <PlayCircle className="w-4 h-4 text-[#00C2A8]" />
+                              Resume Tracking
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuSeparator className="bg-[#242938]" />
                           <DropdownMenuItem
                             onClick={() => handleDeleteEndpoint(ep.id)}
@@ -341,7 +398,7 @@ export default function DomainDetailsPage() {
         </div>
       </div>
       <Dialog open={isEndpointModalOpen} onOpenChange={setIsEndpointModalOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-[#161A23] border-[#242938] text-[#E6EAF2]">
+        <DialogContent className="sm:max-w-106.25 bg-[#161A23] border-[#242938] text-[#E6EAF2]">
           <DialogHeader>
             <DialogTitle>
               {editingEndpointId ? "Edit Endpoint" : "Add New Endpoint"}

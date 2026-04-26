@@ -127,6 +127,7 @@ def _match_endpoint_for_tracking(db: Session, org_id: uuid.UUID, payload: Execut
 
     normalized_method = (payload.method or ("POST" if payload.protocol == "graphql" else "GET")).upper()
     normalized_path = _sanitize_relative_path(target.path or "/")
+    legacy_path = normalized_path.lstrip("/")
 
     api_rows = list(db.scalars(select(API).where(API.org_id == org_id)).all())
     matched_api_ids: list[uuid.UUID] = []
@@ -144,7 +145,7 @@ def _match_endpoint_for_tracking(db: Session, org_id: uuid.UUID, payload: Execut
         select(Endpoint).where(
             Endpoint.org_id == org_id,
             Endpoint.api_id.in_(matched_api_ids),
-            Endpoint.path == normalized_path,
+            Endpoint.path.in_([normalized_path, legacy_path]),
             Endpoint.method == normalized_method,
         )
     )
@@ -195,6 +196,16 @@ def _apply_tracking_failure_policy(
     db.add(endpoint)
     db.commit()
     return paused, notification
+
+
+def _is_execute_failure_for_tracking(response: ExecuteResponse) -> bool:
+    if not response.success:
+        return True
+    if response.result is not None and hasattr(response.result, "status_code"):
+        status_code = int(getattr(response.result, "status_code", 0) or 0)
+        if status_code == 404 or status_code >= 500:
+            return True
+    return False
 
 
 @router.post("/request", response_model=TestResponse)
@@ -305,7 +316,7 @@ async def execute_test(payload: ExecuteRequest, request: Request, db: Session = 
                      paused, notice = _apply_tracking_failure_policy(
                          db,
                          tracked_endpoint,
-                         parsed.success,
+                         not _is_execute_failure_for_tracking(parsed),
                          settings.tracking_error_pause_threshold,
                      )
                      if notice:

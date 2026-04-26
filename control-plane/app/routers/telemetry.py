@@ -24,7 +24,7 @@ def get_telemetry_endpoints(request: Request, window_hours: int = 24):
             endpoint,
             method,
             COUNT(*) as request_count,
-            AVG(CASE WHEN status >= 500 THEN 1.0 ELSE 0.0 END) as error_rate,
+            AVG(CASE WHEN status = 404 OR status >= 500 THEN 1.0 ELSE 0.0 END) as error_rate,
             COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms), 0) as p95_latency_ms
         FROM api_telemetry
         WHERE org_id = :org_id

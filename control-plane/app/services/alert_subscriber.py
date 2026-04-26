@@ -3,10 +3,14 @@ import json
 import logging
 import threading
 import time
+from datetime import datetime, timezone
 
 import httpx
 from confluent_kafka import Consumer, KafkaError
 from confluent_kafka.admin import AdminClient, NewTopic
+
+from app.db.session import SessionLocal
+from app.models.notification import Notification
 
 from app.core.config import Settings
 
@@ -125,6 +129,8 @@ class AlertSubscriber:
             self._consumer.commit(message=message, asynchronous=False)
 
     def _dispatch(self, payload: dict) -> None:
+        self._store_notification(payload)
+
         if not self._settings.alert_webhook_url:
             self._logger.warning("Alert received with no webhook configured: %s", json.dumps(payload, ensure_ascii=True))
             return
@@ -134,3 +140,61 @@ class AlertSubscriber:
                 self._logger.error("Alert webhook failed: status=%s body=%s", response.status_code, response.text)
         except Exception as exc:
             self._logger.error("Alert webhook delivery error: %s", exc)
+
+    def _store_notification(self, payload: dict) -> None:
+        org_id = str(payload.get("org_id") or "").strip()
+        if not org_id:
+            return
+
+        risk_score_raw = payload.get("risk_score")
+        try:
+            risk_score = float(risk_score_raw)
+        except (TypeError, ValueError):
+            risk_score = 0.0
+
+        severity = str(payload.get("severity") or "warning").strip().lower()
+        if severity not in {"info", "warning", "critical", "success"}:
+            severity = "warning"
+        if risk_score >= 0.9:
+            severity = "critical"
+        elif severity == "warning" and risk_score >= 0.7:
+            severity = "critical"
+
+        endpoint = str(payload.get("endpoint") or payload.get("path") or "endpoint").strip()
+        method = str(payload.get("method") or "API").strip().upper()
+        prediction = str(payload.get("prediction") or "high_failure_risk").strip()
+        title = "Prediction alert"
+        if severity == "critical":
+            title = "Critical prediction detected"
+
+        message = (
+            f"{method} {endpoint} is flagged as {prediction.replace('_', ' ')} with risk score {risk_score:.1%}."
+        )
+
+        db = SessionLocal()
+        try:
+            db.add(
+                Notification(
+                    org_id=org_id,  # type: ignore[arg-type]
+                    title=title,
+                    message=message,
+                    severity=severity,
+                    source="ml.alerts",
+                    extra_metadata={
+                        "api_id": str(payload.get("api_id") or ""),
+                        "endpoint": endpoint,
+                        "method": method,
+                        "prediction": prediction,
+                        "risk_score": risk_score,
+                        "timestamp": payload.get("timestamp"),
+                    },
+                    read_at=None,
+                    created_at=datetime.now(timezone.utc),
+                )
+            )
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            self._logger.error("Failed to persist alert notification: %s", exc)
+        finally:
+            db.close()

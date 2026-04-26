@@ -351,6 +351,10 @@ export default function PredictionsPage() {
               Your APIs look healthy! Our ML models are constantly monitoring
               traffic patterns for anomalies.
             </p>
+            <p className="text-[#9AA3B2] mt-2 max-w-lg text-center text-sm">
+              If traffic is mostly HTTP 404, inference is intentionally skipped
+              and those events are handled by tracking auto-pause policy.
+            </p>
           </CardContent>
         </Card>
       ) : filteredGroups.length === 0 ? (

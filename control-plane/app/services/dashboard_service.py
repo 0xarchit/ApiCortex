@@ -17,7 +17,7 @@ class DashboardService:
             """
             SELECT
                 COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms), 0) AS p95_latency_ms,
-                COALESCE(AVG(CASE WHEN status >= 500 THEN 1.0 ELSE 0.0 END), 0) AS error_rate,
+                COALESCE(AVG(CASE WHEN status = 404 OR status >= 500 THEN 1.0 ELSE 0.0 END), 0) AS error_rate,
                 COALESCE(COUNT(*), 0) AS request_count
             FROM api_telemetry
             WHERE org_id = :org_id

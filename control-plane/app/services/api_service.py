@@ -13,6 +13,15 @@ from app.services.timescale_cleanup_service import TimescaleCleanupService
 class APIService:
     """Service for managing APIs and their endpoints."""
     @staticmethod
+    def _normalize_endpoint_path(path: str) -> str:
+        normalized = path.strip()
+        if not normalized:
+            return "/"
+        if not normalized.startswith("/"):
+            normalized = f"/{normalized}"
+        return normalized
+
+    @staticmethod
     def list_apis(db: Session, org_id: uuid.UUID) -> list[API]:
         """List all APIs for an organization.
         
@@ -119,6 +128,7 @@ class APIService:
         if not api:
             raise ValueError("API not found")
         method = payload.method.upper()
+        normalized_path = APIService._normalize_endpoint_path(payload.path)
         poll_interval_seconds = payload.poll_interval_seconds
         timeout_ms = payload.timeout_ms
         if poll_interval_seconds is not None and poll_interval_seconds <= 0:
@@ -128,7 +138,7 @@ class APIService:
         exists = db.scalar(
             select(Endpoint).where(
                 Endpoint.api_id == api_id,
-                Endpoint.path == payload.path,
+                Endpoint.path == normalized_path,
                 Endpoint.method == method,
                 Endpoint.org_id == org_id,
             )
@@ -138,7 +148,7 @@ class APIService:
         endpoint = Endpoint(
             api_id=api_id,
             org_id=org_id,
-            path=payload.path,
+            path=normalized_path,
             method=method,
             monitoring_enabled=payload.monitoring_enabled,
             poll_interval_seconds=poll_interval_seconds,
@@ -162,7 +172,7 @@ class APIService:
         if not endpoint:
             raise ValueError("Endpoint not found")
 
-        path = payload.path if payload.path is not None else endpoint.path
+        path = APIService._normalize_endpoint_path(payload.path) if payload.path is not None else endpoint.path
         method = payload.method.upper() if payload.method is not None else endpoint.method
 
         if payload.poll_interval_seconds is not None and payload.poll_interval_seconds <= 0:
@@ -187,6 +197,11 @@ class APIService:
         endpoint.method = method
         if payload.monitoring_enabled is not None:
             endpoint.monitoring_enabled = payload.monitoring_enabled
+            if payload.monitoring_enabled:
+                endpoint.auto_paused = False
+                endpoint.consecutive_error_count = 0
+            else:
+                endpoint.auto_paused = False
         if payload.poll_interval_seconds is not None:
             endpoint.poll_interval_seconds = payload.poll_interval_seconds
         if payload.timeout_ms is not None:
@@ -204,5 +219,12 @@ class APIService:
         endpoint = db.scalar(select(Endpoint).where(Endpoint.id == endpoint_id, Endpoint.org_id == org_id))
         if not endpoint:
             raise ValueError("Endpoint not found")
+
+        TimescaleCleanupService.delete_endpoint_data(
+            org_id=org_id,
+            api_id=endpoint.api_id,
+            endpoint=endpoint.path,
+            method=endpoint.method,
+        )
         db.delete(endpoint)
         db.commit()

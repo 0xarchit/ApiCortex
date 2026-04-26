@@ -57,6 +57,8 @@ class EndpointOut(BaseModel):
     path: str
     method: str
     monitoring_enabled: bool
+    consecutive_error_count: int = 0
+    auto_paused: bool = False
     poll_interval_seconds: int | None = None
     timeout_ms: int | None = None
     poll_headers_json: dict[str, str] | None = None

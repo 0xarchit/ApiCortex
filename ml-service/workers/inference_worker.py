@@ -288,7 +288,30 @@ class InferenceWorker:
             self.metrics.telemetry_write_failures += 1
             raise RuntimeError(f"telemetry write failed: {exc}") from exc
 
-        feature_rows = self.feature_engineer.ingest(filtered_events)
+        inference_events = [event for event in filtered_events if int(event.status) != 404]
+        if not inference_events:
+            await asyncio.to_thread(self.consumer.commit_message, message)
+            self.metrics.batches_processed += 1
+            self.metrics.events_processed += len(filtered_events)
+            self.logger.info(
+                "Processed telemetry batch with inference skipped due to only 404 statuses",
+                extra={
+                    "extra": {
+                        "events_processed": len(filtered_events),
+                        "telemetry_written": len(filtered_events),
+                        "inference_skipped_for_404": True,
+                        "totals": {
+                            "batches": self.metrics.batches_processed,
+                            "events": self.metrics.events_processed,
+                            "predictions": self.metrics.predictions_written,
+                            "alerts_published": self.metrics.alerts_published,
+                        },
+                    }
+                },
+            )
+            return
+
+        feature_rows = self.feature_engineer.ingest(inference_events)
         prediction_records: list[PredictionRecord] = []
         alerts_to_publish: list[dict[str, Any]] = []
         risk_scores: list[float] = []

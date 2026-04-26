@@ -470,6 +470,9 @@ func sanitizeTarget(target Target) (Target, bool) {
 	if target.OrgID == "" || target.APIID == "" || target.BaseURL == "" || target.Path == "" {
 		return Target{}, false
 	}
+	if !strings.HasPrefix(target.Path, "/") {
+		target.Path = "/" + target.Path
+	}
 	if target.Interval <= 0 {
 		target.Interval = 30 * time.Second
 	}
@@ -584,9 +587,15 @@ func joinURL(base, path string) (string, error) {
 		return "", fmt.Errorf("base_url must include scheme and host")
 	}
 	cleanPath := "/" + strings.TrimPrefix(strings.TrimSpace(path), "/")
-	if strings.HasSuffix(parsedBase.Path, "/") {
-		cleanPath = strings.TrimSuffix(parsedBase.Path, "/") + cleanPath
+	basePath := strings.TrimSpace(parsedBase.Path)
+	if basePath != "" && basePath != "/" {
+		basePath = strings.TrimSuffix(basePath, "/")
+		if !strings.HasPrefix(basePath, "/") {
+			basePath = "/" + basePath
+		}
+		cleanPath = basePath + cleanPath
 	}
 	parsedBase.Path = cleanPath
+	parsedBase.RawPath = ""
 	return parsedBase.String(), nil
 }

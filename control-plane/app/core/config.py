@@ -72,9 +72,15 @@ class Settings(BaseSettings):
     kafka_service_cert: str = Field(default="", validation_alias="KAFKA_SERVICE_CERT")
     kafka_service_key: str = Field(default="", validation_alias="KAFKA_SERVICE_KEY")
     kafka_topic_alerts: str = Field(default="alerts", validation_alias="KAFKA_TOPIC_ALERTS")
+    kafka_topic_raw: str = Field(default="telemetry.raw", validation_alias="KAFKA_TOPIC_RAW")
     kafka_alerts_group_id: str = Field(default="apicortex-alert-subscriber", validation_alias="KAFKA_ALERTS_GROUP_ID")
+    kafka_telemetry_tracking_group_id: str = Field(
+        default="apicortex-telemetry-tracking-subscriber",
+        validation_alias="KAFKA_TELEMETRY_TRACKING_GROUP_ID",
+    )
     alert_webhook_url: str = Field(default="", validation_alias="ALERT_WEBHOOK_URL")
     alert_poll_timeout_seconds: float = Field(default=1.0, validation_alias="ALERT_POLL_TIMEOUT_SECONDS")
+    telemetry_poll_timeout_seconds: float = Field(default=1.0, validation_alias="TELEMETRY_POLL_TIMEOUT_SECONDS")
     ingest_key_pepper: str = Field(default="", validation_alias="INGEST_KEY_PEPPER")
     api_testing_url: str = Field(default="http://api-testing:9090", validation_alias="API_TESTING_URL")
 

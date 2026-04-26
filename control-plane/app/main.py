@@ -28,6 +28,7 @@ from app.db.base import Base
 from app.db.session import engine
 from app.services.alert_subscriber import AlertSubscriber
 from app.services.job_worker import JobWorker
+from app.services.telemetry_tracking_subscriber import TelemetryTrackingSubscriber
 import app.models
 from app.routers import apis, auth, contracts, dashboard, endpoints, orgs, predictions, telemetry, testing
 
@@ -38,10 +39,13 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     stop_event = asyncio.Event()
     worker_task = asyncio.create_task(JobWorker().run(stop_event))
     alert_subscriber = AlertSubscriber(settings)
+    telemetry_tracking_subscriber = TelemetryTrackingSubscriber(settings)
     alert_subscriber.start()
+    telemetry_tracking_subscriber.start()
     yield
     stop_event.set()
     await worker_task
+    telemetry_tracking_subscriber.stop()
     alert_subscriber.stop()
 
 

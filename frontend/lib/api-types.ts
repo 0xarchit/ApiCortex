@@ -30,7 +30,11 @@ export interface Endpoint {
   api_id: string;
   path: string;
   method: string;
+  monitoring_enabled: boolean;
+  consecutive_error_count: number;
+  auto_paused: boolean;
   created_at: string;
+  updated_at?: string;
 }
 
 /** Stored OpenAPI document version for an API domain. */

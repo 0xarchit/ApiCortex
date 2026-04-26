@@ -79,6 +79,22 @@ const toSafeMessage = (value: unknown) => {
   return `${normalized.slice(0, MAX_ERROR_TEXT_LENGTH)}...`;
 };
 
+const getStatusLabel = (status: number) => {
+  if (status === 200) return "OK";
+  if (status === 201) return "Created";
+  if (status === 202) return "Accepted";
+  if (status === 204) return "No Content";
+  if (status === 301) return "Moved Permanently";
+  if (status === 302) return "Found";
+  if (status === 400) return "Bad Request";
+  if (status === 401) return "Unauthorized";
+  if (status === 403) return "Forbidden";
+  if (status === 404) return "Not Found";
+  if (status === 409) return "Conflict";
+  if (status >= 500) return "Server Error";
+  return "Error";
+};
+
 export default function TestingPage() {
   const searchParams = useSearchParams();
   const [protocol, setProtocol] = useState<"http" | "graphql" | "websocket">(
@@ -312,6 +328,7 @@ export default function TestingPage() {
       let nextDiagnostics: TestResponseState["diagnostics"] = null;
       let nextMessageCount: number | null = null;
       let nextTimedOut: boolean | null = null;
+      let nextError = executeData.error || null;
 
       if (executeData.result && "status_code" in executeData.result) {
         nextStatus = executeData.result.status_code;
@@ -323,6 +340,9 @@ export default function TestingPage() {
             : String(executeData.result.body || "");
         nextHeaders = executeData.result.headers || {};
         nextDiagnostics = executeData.result.diagnostics;
+        if (!nextError && nextStatus >= 400) {
+          nextError = `HTTP ${nextStatus} ${getStatusLabel(nextStatus)}`;
+        }
       } else if (executeData.result && "messages" in executeData.result) {
         nextTime = `${executeData.result.total_time_ms.toFixed(2)}ms`;
         nextSize = `${executeData.result.message_count} messages`;
@@ -341,7 +361,7 @@ export default function TestingPage() {
         headers: nextHeaders,
         success: executeData.success,
         protocol,
-        error: executeData.error || null,
+        error: nextError,
         testId: executeData.test_id || null,
         diagnostics: nextDiagnostics,
         messageCount: nextMessageCount,
@@ -721,7 +741,10 @@ export default function TestingPage() {
                     <>
                       <AlertTriangle className="w-4 h-4 shrink-0 text-[#F5B74F]" />
                       <span className="text-sm font-medium text-[#F5B74F] wrap-break-word whitespace-pre-wrap max-w-full">
-                        {toSafeMessage(response.error || "Execution Failed")}
+                        {toSafeMessage(
+                          response.error ||
+                            `HTTP ${response.status} ${getStatusLabel(response.status)}`,
+                        )}
                       </span>
                     </>
                   )}

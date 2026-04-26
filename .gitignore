@@ -236,10 +236,7 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
-EngineeringDocument.txt
 .skills
-complete.md
-reviewanalyses.md
 scripts/*
 progress.yaml
 LocalDev/*
