@@ -237,6 +237,6 @@ venv.bak/
 dmypy.json
 
 .skills
-scripts/*
+scripts/infra
 progress.yaml
 LocalDev/*

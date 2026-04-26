@@ -1,0 +1,60 @@
+services:
+  controlplane:
+    name: "Control Plane"
+    command: "../../.venv/Scripts/python.exe"
+    args:
+      ["-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    working_dir: "../../control-plane"
+    health_check: "http://localhost:8000/health"
+    port: 8000
+    env: {}
+
+  ingest:
+    name: "Ingest Service"
+    command: "go"
+    args: ["run", "./cmd/server"]
+    working_dir: "../../ingest-service"
+    health_check: "http://localhost:8080/health"
+    port: 8080
+    env:
+      ACTIVE_POLLING_ENABLED: "true"
+
+  ml:
+    name: "ML Worker"
+    command: "../../.venv/Scripts/python.exe"
+    args: ["-m", "app.main"]
+    working_dir: "../../ml-service"
+    health_check: null
+    port: 0
+    env: {}
+
+  api_testing:
+    name: "API Testing Engine"
+    command: "cargo"
+    args: ["run"]
+    working_dir: "../../api-testing"
+    health_check: "http://localhost:9090/health"
+    port: 9090
+    env:
+      BIND_ADDR: "127.0.0.1:9090"
+
+  frontend:
+    name: "Frontend"
+    command: "bun"
+    args: ["run", "start"]
+    pre_start:
+      - command: "bun"
+        args: ["run", "build"]
+    working_dir: "../../frontend"
+    health_check: "http://localhost:3000"
+    port: 3000
+    env: {}
+
+  cloudflared:
+    name: "Cloudflared Tunnel"
+    command: "docker"
+    args: ["compose", "up", "--remove-orphans"]
+    working_dir: "../infra/cloudflared"
+    health_check: null
+    port: 0
+    env: {}

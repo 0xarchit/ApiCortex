@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ApiCortex ML Preview</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">ApiCortex Judge Preview</p>
+        <h1>Upload telemetry. Start playback. Show model risk live.</h1>
+        <p class="lede">This MVP scores the uploaded CSV with the real XGBoost artifact and animates the risk timeline
+          so judges can watch the model react to traffic spikes, latency drift, and schema instability.</p>
+      </div>
+      <a class="sample-link" href="/demo-data">Download 5,000-row demo CSV</a>
+    </section>
+
+    <section class="control-panel">
+      <div class="upload-card panel">
+        <h2>1. Upload Dataset</h2>
+        <form id="upload-form">
+          <label class="upload-drop" for="dataset-file">
+            <input id="dataset-file" name="file" type="file" accept=".csv" required>
+            <span id="file-name">Choose the generated demo CSV or your own telemetry export</span>
+          </label>
+          <button id="upload-button" type="submit">Upload CSV</button>
+        </form>
+        <div id="upload-status" class="status">No file uploaded</div>
+      </div>
+
+      <div class="start-card panel">
+        <h2>2. Start Model Playback</h2>
+        <p>Processing runs on the uploaded dataset and returns a live-ready timeline with risk bands and top alerts.</p>
+        <button id="start-button" disabled>Start Demo</button>
+        <div id="process-status" class="status muted">Waiting for uploaded file</div>
+      </div>
+    </section>
+
+    <section class="summary-grid">
+      <article class="metric-card panel">
+        <span>Rows Processed</span>
+        <strong id="rows-processed">0</strong>
+      </article>
+      <article class="metric-card panel alert">
+        <span>High Risk Windows</span>
+        <strong id="high-risk">0</strong>
+      </article>
+      <article class="metric-card panel watch">
+        <span>Watch Windows</span>
+        <strong id="watch-risk">0</strong>
+      </article>
+      <article class="metric-card panel stable">
+        <span>Average Risk</span>
+        <strong id="avg-risk">0.0000</strong>
+      </article>
+    </section>
+
+    <section class="visual-grid">
+      <article class="panel chart-panel">
+        <div class="panel-head">
+          <h2>Live Risk Timeline</h2>
+          <span id="playback-count">0 / 0</span>
+        </div>
+        <svg id="risk-chart" viewBox="0 0 900 320" preserveAspectRatio="none"></svg>
+        <div class="chart-legend">
+          <span><i class="stable-dot"></i> Stable</span>
+          <span><i class="watch-dot"></i> Watch</span>
+          <span><i class="alert-dot"></i> High Failure Risk</span>
+        </div>
+      </article>
+
+      <article class="panel live-panel">
+        <div class="panel-head">
+          <h2>Current Frame</h2>
+          <span id="live-band" class="badge stable-badge">Stable</span>
+        </div>
+        <dl class="live-stats">
+          <div>
+            <dt>Timestamp</dt>
+            <dd id="live-time">-</dd>
+          </div>
+          <div>
+            <dt>Risk Score</dt>
+            <dd id="live-risk">0.0000</dd>
+          </div>
+          <div>
+            <dt>P95 Latency</dt>
+            <dd id="live-latency">0 ms</dd>
+          </div>
+          <div>
+            <dt>Error Rate</dt>
+            <dd id="live-error">0.0000</dd>
+          </div>
+          <div>
+            <dt>Traffic</dt>
+            <dd id="live-traffic">0 rps</dd>
+          </div>
+          <div>
+            <dt>Actual Label</dt>
+            <dd id="live-label">-</dd>
+          </div>
+        </dl>
+        <div class="progress-wrap">
+          <div id="progress-bar"></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="bottom-grid">
+      <article class="panel">
+        <div class="panel-head">
+          <h2>Top Risk Alerts</h2>
+          <span>Highest model scores in the uploaded run</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Risk</th>
+                <th>Band</th>
+                <th>P95</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody id="alerts-body">
+              <tr>
+                <td colspan="5">No alerts yet</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <h2>Judge Notes</h2>
+          <span>Quick proof points from the same uploaded file</span>
+        </div>
+        <ul id="judge-notes" class="notes">
+          <li>Upload the generated CSV and start the demo.</li>
+          <li>The server computes the same derived features used by the trained model.</li>
+          <li>Playback animates sampled frames from the fully processed dataset.</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+
+</html>
