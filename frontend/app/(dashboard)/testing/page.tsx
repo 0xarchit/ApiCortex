@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -87,20 +87,20 @@ const toSafeMessage = (value: unknown) => {
 };
 
 const getStatusLabel = (status: number) => {
-    if (status === 200) return "OK";
-    if (status === 201) return "Created";
-    if (status === 202) return "Accepted";
-    if (status === 204) return "No Content";
-    if (status === 301) return "Moved Permanently";
-    if (status === 302) return "Found";
-    if (status === 400) return "Bad Request";
-    if (status === 401) return "Unauthorized";
-    if (status === 403) return "Forbidden";
-    if (status === 404) return "Not Found";
-    if (status === 409) return "Conflict";
-    if (status >= 500) return "Server Error";
-    return "Error";
-  };
+  if (status === 200) return "OK";
+  if (status === 201) return "Created";
+  if (status === 202) return "Accepted";
+  if (status === 204) return "No Content";
+  if (status === 301) return "Moved Permanently";
+  if (status === 302) return "Found";
+  if (status === 400) return "Bad Request";
+  if (status === 401) return "Unauthorized";
+  if (status === 403) return "Forbidden";
+  if (status === 404) return "Not Found";
+  if (status === 409) return "Conflict";
+  if (status >= 500) return "Server Error";
+  return "Error";
+};
 
 function escapeHtml(str: string): string {
   return str
@@ -139,6 +139,14 @@ function highlightJson(raw: string): string {
 }
 
 export default function TestingPage() {
+  const headerIdCounter = useRef(1);
+  const createHeaderRow = (): HeaderRow => ({
+    id: `header-${headerIdCounter.current++}`,
+    enabled: true,
+    key: "",
+    value: "",
+  });
+
   const [protocol, setProtocol] = useState<"http" | "graphql" | "websocket">(
     "http",
   );
@@ -156,15 +164,23 @@ export default function TestingPage() {
     "none",
   );
   const [headerRows, setHeaderRows] = useState<HeaderRow[]>([
-    { id: crypto.randomUUID(), enabled: true, key: "", value: "" },
+    { id: "header-0", enabled: true, key: "", value: "" },
   ]);
   const [requestHistory, setRequestHistory] = useState<
-    { url: string; method: string; protocol: string; body: string; bodyMode: string; timestamp: number }[]
+    {
+      url: string;
+      method: string;
+      protocol: string;
+      body: string;
+      bodyMode: string;
+      timestamp: number;
+    }[]
   >([]);
-const [authToken, setAuthToken] = useState("");
+  const [authToken, setAuthToken] = useState("");
 
   const getQueryParams = () => {
-    if (typeof window === 'undefined') return { url: null, method: null, protocol: null };
+    if (typeof window === "undefined")
+      return { url: null, method: null, protocol: null };
     const params = new URLSearchParams(window.location.search);
     return {
       url: params.get("url"),
@@ -318,10 +334,7 @@ const [authToken, setAuthToken] = useState("");
   }, []);
 
   const addHeaderRow = () => {
-    setHeaderRows((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), enabled: true, key: "", value: "" },
-    ]);
+    setHeaderRows((prev) => [...prev, createHeaderRow()]);
   };
 
   const removeHeaderRow = (id: string) => {
@@ -330,7 +343,7 @@ const [authToken, setAuthToken] = useState("");
       if (next.length > 0) {
         return next;
       }
-      return [{ id: crypto.randomUUID(), enabled: true, key: "", value: "" }];
+      return [createHeaderRow()];
     });
   };
 
@@ -387,7 +400,11 @@ const [authToken, setAuthToken] = useState("");
 
   const parsedQueryParams = useMemo(() => {
     try {
-      const urlObj = new URL(url.includes("://") ? url : `http://placeholder${url.startsWith("/") ? url : `/${url}`}`);
+      const urlObj = new URL(
+        url.includes("://")
+          ? url
+          : `http://placeholder${url.startsWith("/") ? url : `/${url}`}`,
+      );
       const params: { key: string; value: string }[] = [];
       urlObj.searchParams.forEach((value, key) => {
         params.push({ key, value });
@@ -695,13 +712,19 @@ const [authToken, setAuthToken] = useState("");
                       onClick={() => {
                         setUrl(h.url);
                         setMethod(h.method);
-                        setProtocol(h.protocol as "http" | "graphql" | "websocket");
+                        setProtocol(
+                          h.protocol as "http" | "graphql" | "websocket",
+                        );
                         setRequestBody(h.body);
-                        setBodyMode(h.bodyMode as "none" | "json" | "text" | "xml");
+                        setBodyMode(
+                          h.bodyMode as "none" | "json" | "text" | "xml",
+                        );
                       }}
                       className="focus:bg-[#242938] focus:text-[#E6EAF2] cursor-pointer text-xs font-mono"
                     >
-                      <span className={getMethodColor(h.method)}>{h.method}</span>
+                      <span className={getMethodColor(h.method)}>
+                        {h.method}
+                      </span>
                       <span className="ml-2 truncate">{h.url}</span>
                     </DropdownMenuItem>
                   ))}
@@ -850,14 +873,19 @@ const [authToken, setAuthToken] = useState("");
                   <div className="space-y-1 font-mono text-xs">
                     {parsedQueryParams.map((p, i) => (
                       <div key={i} className="flex gap-2 items-center py-1">
-                        <span className="text-[#5B5DFF] font-semibold">{p.key}</span>
+                        <span className="text-[#5B5DFF] font-semibold">
+                          {p.key}
+                        </span>
                         <span className="text-[#9AA3B2]">=</span>
                         <span className="text-[#00C2A8]">{p.value}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <span className="text-sm italic">No query parameters in URL. Add ?key=value to the URL bar above.</span>
+                  <span className="text-sm italic">
+                    No query parameters in URL. Add ?key=value to the URL bar
+                    above.
+                  </span>
                 )}
               </TabsContent>
               <TabsContent
@@ -865,7 +893,9 @@ const [authToken, setAuthToken] = useState("");
                 className="flex-1 p-4 m-0 text-sm text-[#9AA3B2] overflow-auto"
               >
                 <div className="space-y-3">
-                  <p className="text-[#E6EAF2] text-xs uppercase tracking-wider font-semibold">Bearer Token</p>
+                  <p className="text-[#E6EAF2] text-xs uppercase tracking-wider font-semibold">
+                    Bearer Token
+                  </p>
                   <Input
                     value={authToken}
                     onChange={(e) => setAuthToken(e.target.value)}
@@ -875,7 +905,11 @@ const [authToken, setAuthToken] = useState("");
                   />
                   {authToken && (
                     <p className="text-xs text-[#9AA3B2]">
-                      Token set ({authToken.length} chars). Added as <code className="text-[#5B5DFF]">Authorization: Bearer ...</code> header.
+                      Token set ({authToken.length} chars). Added as{" "}
+                      <code className="text-[#5B5DFF]">
+                        Authorization: Bearer ...
+                      </code>{" "}
+                      header.
                     </p>
                   )}
                   <Link
@@ -905,14 +939,20 @@ const [authToken, setAuthToken] = useState("");
                 <div className="w-px h-4 bg-[#242938] shrink-0" />
                 <div className="flex items-center gap-2 text-sm font-medium shrink-0">
                   <span className="text-[#9AA3B2]">Time</span>
-                  <Badge variant="outline" className="font-mono text-[#00C2A8] border-[#00C2A8]/20 bg-[#00C2A8]/10">
+                  <Badge
+                    variant="outline"
+                    className="font-mono text-[#00C2A8] border-[#00C2A8]/20 bg-[#00C2A8]/10"
+                  >
                     {response.time}
                   </Badge>
                 </div>
                 <div className="w-px h-4 bg-[#242938] shrink-0" />
                 <div className="flex items-center gap-2 text-sm font-medium shrink-0">
                   <span className="text-[#9AA3B2]">Size</span>
-                  <Badge variant="outline" className="font-mono text-[#E6EAF2] border-[#242938] bg-[#242938]/30">
+                  <Badge
+                    variant="outline"
+                    className="font-mono text-[#E6EAF2] border-[#242938] bg-[#242938]/30"
+                  >
                     {response.size}
                   </Badge>
                 </div>
@@ -978,7 +1018,11 @@ const [authToken, setAuthToken] = useState("");
                   </div>
                   {response.body ? (
                     <pre className="p-4 font-mono text-sm leading-relaxed overflow-auto h-full whitespace-pre-wrap wrap-break-word min-w-0">
-                      <code dangerouslySetInnerHTML={{ __html: highlightJson(response.body) }} />
+                      <code
+                        dangerouslySetInnerHTML={{
+                          __html: highlightJson(response.body),
+                        }}
+                      />
                     </pre>
                   ) : (
                     <div className="p-4 text-sm text-[#9AA3B2] font-mono italic">
