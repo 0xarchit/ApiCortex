@@ -368,9 +368,9 @@ export default function LandingPage() {
 
             {/* Parallax Hero Mockups */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
+              initial={reduceMotion ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.95 }}
+              animate={reduceMotion ? undefined : { opacity: 1, scale: 1 }}
+              transition={{ duration: reduceMotion ? 0 : 1, delay: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
               className="relative lg:h-150 flex items-center justify-center"
             >
               <ParallaxCard
@@ -409,12 +409,20 @@ export default function LandingPage() {
                   </div>
                   <motion.div
                     className="absolute inset-0 bg-linear-to-b from-transparent via-[#5B5DFF]/10 to-transparent"
-                    animate={{ top: ["-100%", "200%"] }}
-                    transition={{
-                      duration: 2,
-                      repeat: Infinity,
-                      ease: "linear",
-                    }}
+                    animate={
+                      reduceMotion
+                        ? undefined
+                        : { top: ["-100%", "200%"] }
+                    }
+                    transition={
+                      reduceMotion
+                        ? {}
+                        : {
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: "linear",
+                          }
+                    }
                   />
                 </div>
               </ParallaxCard>
@@ -470,9 +478,9 @@ export default function LandingPage() {
                   stroke="#5B5DFF"
                   strokeWidth="0.5"
                   strokeDasharray="2 2"
-                  initial={{ pathLength: 0 }}
-                  animate={{ pathLength: 1 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                  initial={reduceMotion ? { pathLength: 1 } : { pathLength: 0 }}
+                  animate={reduceMotion ? undefined : { pathLength: 1 }}
+                  transition={reduceMotion ? {} : { duration: 2, repeat: Infinity, ease: "linear" }}
                 />
                 <motion.path
                   d="M10,80 Q30,60 60,80 T90,20"
@@ -480,9 +488,9 @@ export default function LandingPage() {
                   stroke="#00C2A8"
                   strokeWidth="0.5"
                   strokeDasharray="2 2"
-                  initial={{ pathLength: 0, opacity: 0.5 }}
-                  animate={{ pathLength: 1, opacity: 1 }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                  initial={reduceMotion ? { pathLength: 1, opacity: 1 } : { pathLength: 0, opacity: 0.5 }}
+                  animate={reduceMotion ? undefined : { pathLength: 1, opacity: 1 }}
+                  transition={reduceMotion ? {} : { duration: 3, repeat: Infinity, ease: "linear" }}
                 />
               </svg>
             </motion.div>
@@ -573,15 +581,17 @@ export default function LandingPage() {
                           <motion.div
                             key={i}
                             className={`w-full rounded-t-sm ${h > 70 ? "bg-[#FF5C5C]" : "bg-[#5B5DFF]"}`}
-                            initial={{ height: 0 }}
+                            initial={reduceMotion ? { height: `${h}%` } : { height: 0 }}
                             animate={
-                              featuresInView
-                                ? { height: `${h}%` }
-                                : { height: 0 }
+                              reduceMotion
+                                ? undefined
+                                : featuresInView
+                                  ? { height: `${h}%` }
+                                  : { height: 0 }
                             }
                             transition={{
-                              duration: 0.6,
-                              delay: i * 0.07,
+                              duration: reduceMotion ? 0 : 0.6,
+                              delay: reduceMotion ? 0 : i * 0.07,
                               ease: "easeOut",
                             }}
                           />
@@ -841,11 +851,12 @@ export default function LandingPage() {
                 </div>
               </motion.div>
 <motion.div
-                  initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
-                  whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-                  viewport={reduceMotion ? undefined : { once: true }}
-                  transition={{ duration: reduceMotion ? 0 : 0.5 }}
-                >
+                initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+                whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+                viewport={reduceMotion ? undefined : { once: true }}
+                transition={{ duration: reduceMotion ? 0 : 0.5 }}
+                className="bg-[#161A23] border border-[#242938] rounded-2xl overflow-hidden"
+              >
                 <div className="px-4 py-2 border-b border-[#00C2A8]/20 bg-[#00C2A8]/10 flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-[#00C2A8]" />
                   <span className="text-xs font-mono text-[#00C2A8] font-semibold">

@@ -61,8 +61,11 @@ export default function PrivacyPage() {
                   ApiCortex may collect anonymized, aggregated API telemetry
                   (latency, error rates, traffic volume) solely for the purpose
                   of providing the Platform&apos;s anomaly detection and
-                  monitoring features. This data is never shared with third
-                  parties.
+                  monitoring features. This data is used only for anomaly detection
+                  and monitoring and is only processed by authorized third-party
+                  processors under strict contractual, security, and confidentiality
+                  obligations. It is never sold or shared for advertising or
+                  marketing purposes.
                 </p>
                 <p>
                   <strong className="text-[#E6EAF2]">Usage Logs.</strong> We

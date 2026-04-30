@@ -656,14 +656,8 @@ export default function TestingPage() {
             </Button>
             {requestHistory.length > 0 && (
               <DropdownMenu>
-                <DropdownMenuTrigger>
-                  <Button
-                    variant="outline"
-                    title="Request history"
-                    className="shrink-0 border-[#242938] text-[#9AA3B2] hover:text-[#E6EAF2] hover:bg-[#242938]"
-                  >
-                    <Clock className="w-4 h-4" />
-                  </Button>
+                <DropdownMenuTrigger className="shrink-0 border border-[#242938] text-[#9AA3B2] hover:text-[#E6EAF2] hover:bg-[#242938] rounded-md px-2 py-1.5 inline-flex items-center justify-center">
+                  <Clock className="w-4 h-4" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="bg-[#161A23] border-[#242938] text-[#E6EAF2] max-h-64 overflow-y-auto">
                   {requestHistory.map((h, i) => (

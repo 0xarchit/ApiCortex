@@ -139,10 +139,11 @@ export default function ContactPage() {
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-5">
                     <div>
-                      <label className="block text-sm font-medium text-[#9AA3B2] mb-1.5">
+                      <label htmlFor="contact-name" className="block text-sm font-medium text-[#9AA3B2] mb-1.5">
                         Your name
                       </label>
                       <Input
+                        id="contact-name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder="Alex Chen"
@@ -151,10 +152,11 @@ export default function ContactPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-[#9AA3B2] mb-1.5">
+                      <label htmlFor="contact-email" className="block text-sm font-medium text-[#9AA3B2] mb-1.5">
                         Email address
                       </label>
                       <Input
+                        id="contact-email"
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -164,10 +166,11 @@ export default function ContactPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-[#9AA3B2] mb-1.5">
+                      <label htmlFor="contact-message" className="block text-sm font-medium text-[#9AA3B2] mb-1.5">
                         How can we help?
                       </label>
                       <textarea
+                        id="contact-message"
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
                         placeholder="Tell us what's on your mind..."

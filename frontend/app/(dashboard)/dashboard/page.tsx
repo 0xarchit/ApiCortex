@@ -26,16 +26,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 function useCountUp(target: number, duration = 800) {
   const [value, setValue] = useState(0);
   const frameRef = useRef<number>(0);
+  const startValueRef = useRef<number>(0);
 
   useEffect(() => {
+    if (target === startValueRef.current) return;
+    const startValue = startValueRef.current;
     const start = performance.now();
     const animate = (now: number) => {
       const elapsed = now - start;
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(target * eased);
+      const newValue = startValue + (target - startValue) * eased;
+      setValue(newValue);
       if (progress < 1) {
         frameRef.current = requestAnimationFrame(animate);
+      } else {
+        startValueRef.current = target;
       }
     };
     frameRef.current = requestAnimationFrame(animate);
@@ -163,10 +169,10 @@ const apiCountAnimated = useCountUp(apiCount, 600);
   const p95Animated = useCountUp(p95Latency, 800);
 
   // TODO: Fetch real historical data from backend to compute actual deltas
-  const deltaApi = 0; // Placeholder: replace with (apiCount - yesterdayApiCount)
-  const deltaP95 = 0; // Placeholder: replace with actual latency change
-  const deltaError = 0; // Placeholder: replace with actual error rate change
-  const deltaRequests = 0; // Placeholder: replace with actual request count change
+  const deltaApi: number | null = null; // Placeholder: replace with (apiCount - yesterdayApiCount)
+  const deltaP95: number | null = null; // Placeholder: replace with actual latency change
+  const deltaError: number | null = null; // Placeholder: replace with actual error rate change
+  const deltaRequests: number | null = null; // Placeholder: replace with actual request count change
 
   const modules = [
     {
@@ -251,7 +257,7 @@ const apiCountAnimated = useCountUp(apiCount, 600);
             <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
               {Math.round(apiCountAnimated)}
             </div>
-<DeltaBadge value={deltaApi} label="vs yesterday" />
+            {deltaApi !== null && <DeltaBadge value={deltaApi} label="vs yesterday" />}
             </CardContent>
           </Card>
           <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
@@ -283,11 +289,13 @@ const apiCountAnimated = useCountUp(apiCount, 600);
             <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
               {p95Animated.toFixed(1)} ms
             </div>
-<DeltaBadge
+            {deltaP95 !== null && (
+              <DeltaBadge
                 value={deltaP95}
                 label="vs yesterday"
                 positiveIsGood={false}
               />
+            )}
             </CardContent>
           </Card>
           <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
@@ -303,11 +311,13 @@ const apiCountAnimated = useCountUp(apiCount, 600);
               <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
                 {errorRateAnimated.toFixed(2)}%
               </div>
-              <DeltaBadge
-                value={deltaError}
-                label="vs yesterday"
-                positiveIsGood={false}
-              />
+              {deltaError !== null && (
+                <DeltaBadge
+                  value={deltaError}
+                  label="vs yesterday"
+                  positiveIsGood={false}
+                />
+              )}
             </CardContent>
           </Card>
           <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
@@ -323,7 +333,7 @@ const apiCountAnimated = useCountUp(apiCount, 600);
               <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
                 {Math.round(requestCountAnimated).toLocaleString()}
               </div>
-              <DeltaBadge value={deltaRequests} label="vs yesterday" />
+              {deltaRequests !== null && <DeltaBadge value={deltaRequests} label="vs yesterday" />}
             </CardContent>
         </Card>
       </div>
