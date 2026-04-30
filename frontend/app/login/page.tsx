@@ -1,15 +1,19 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { Network } from "lucide-react";
-
-const randomDots = Array.from({ length: 12 }, () => ({
-  left: Math.random() * 100,
-  top: Math.random() * 100,
-  duration: 3 + Math.random() * 4,
-  delay: Math.random() * 3,
-}));
+import { useMemo } from "react";
 
 function AnimatedBg() {
+  /* eslint-disable react-hooks/purity -- decorative dots: Math.random() called once per mount */
+  const randomDots = useMemo(() => {
+    return Array.from({ length: 12 }, () => ({
+      left: Math.random() * 100,
+      top: Math.random() * 100,
+      duration: 3 + Math.random() * 4,
+      delay: Math.random() * 3,
+    }));
+  }, []);
+  /* eslint-enable react-hooks/purity */
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
       <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[#5B5DFF]/20 blur-[120px] animate-pulse" />
@@ -30,12 +34,6 @@ function AnimatedBg() {
           }}
         />
       ))}
-      <style>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
-          50% { transform: translateY(-20px) scale(1.5); opacity: 0.7; }
-        }
-      `}</style>
     </div>
   );
 }

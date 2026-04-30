@@ -59,6 +59,8 @@ export default function TelemetryPage() {
   const sparkData = useMemo(() => {
     return data.map((item) => ({
       ...item,
+      // TODO: Replace with real historical trend data from backend
+      isSyntheticTrend: true,
       trend: Array.from({ length: 6 }, (_, i) => ({
         i,
         v:
@@ -137,10 +139,6 @@ export default function TelemetryPage() {
       ? data.reduce((acc, curr) => acc + curr.p95_latency_ms, 0) / data.length
       : 0;
 
-  const timeLabel = { "1h": "1h", "24h": "24h", "7d": "7d", "30d": "30d" }[
-    timeRange
-  ];
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -173,7 +171,7 @@ export default function TelemetryPage() {
         <Card className="bg-[#161A23]/50 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-[#9AA3B2]">
-              Total Requests ({timeLabel})
+              Total Requests ({timeRange})
             </CardTitle>
             <Activity className="h-4 w-4 text-[#00C2A8]" />
           </CardHeader>
@@ -187,7 +185,7 @@ export default function TelemetryPage() {
         <Card className="bg-[#161A23]/50 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-[#9AA3B2]">
-              Avg Error Rate ({timeLabel})
+              Avg Error Rate ({timeRange})
             </CardTitle>
             <AlertTriangle className="h-4 w-4 text-[#FF5C5C]" />
           </CardHeader>
@@ -232,7 +230,7 @@ export default function TelemetryPage() {
                   Endpoint
                 </TableHead>
                 <TableHead className="text-[#9AA3B2] font-medium text-right">
-                  Traffic ({timeLabel})
+                  Traffic ({timeRange})
                 </TableHead>
                 <TableHead className="text-[#9AA3B2] font-medium text-right">
                   Error Rate
@@ -297,9 +295,13 @@ export default function TelemetryPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end">
-                        <ResponsiveContainer width={70} height={28}>
-                          <LineChart data={item.trend}>
+                      <div className="flex justify-end" title={item.isSyntheticTrend ? "Trend is illustrative only — real data pending" : undefined}>
+                          <ResponsiveContainer
+                            width={70}
+                            height={28}
+                            className={item.isSyntheticTrend ? "opacity-50" : undefined}
+                          >
+                            <LineChart data={item.trend}>
                             <Line
                               type="monotone"
                               dataKey="v"

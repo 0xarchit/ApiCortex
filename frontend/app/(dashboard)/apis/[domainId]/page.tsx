@@ -70,9 +70,30 @@ export default function DomainDetailsPage() {
 
   const handleCopyBaseUrl = async () => {
     if (!domain?.base_url) return;
-    await navigator.clipboard.writeText(domain.base_url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(domain.base_url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success("Base URL copied to clipboard");
+    } catch {
+      // Fallback for non-HTTPS contexts or clipboard failures
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = domain.base_url;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast.success("Base URL copied to clipboard");
+      } catch {
+        toast.error("Failed to copy URL");
+      }
+    }
   };
   const domainQuery = useQuery({
     queryKey: ["api-domain", domainId],

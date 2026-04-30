@@ -67,7 +67,7 @@ export default function PredictionsPage() {
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
   const [now, setNow] = useState(() => Date.now());
   const [autoRefresh, setAutoRefresh] = useState(false);
-  const predictionsQuery = useQuery({
+const predictionsQuery = useQuery({
     queryKey: ["predictions"],
     queryFn: async () => {
       const response =
@@ -76,15 +76,16 @@ export default function PredictionsPage() {
     },
     staleTime: 2 * 60 * 1000,
   });
+  const { refetch: predictionsRefetch } = predictionsQuery;
 
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
-      predictionsQuery.refetch();
+      predictionsRefetch();
       setNow(Date.now());
     }, 30000);
     return () => clearInterval(interval);
-  }, [autoRefresh, predictionsQuery]);
+  }, [autoRefresh, predictionsRefetch]);
 
   const data = useMemo(
     () => predictionsQuery.data ?? [],

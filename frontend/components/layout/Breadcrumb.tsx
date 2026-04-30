@@ -13,6 +13,10 @@ const routeLabels: Record<string, string> = {
   settings: "Settings",
 };
 
+function titleCase(str: string): string {
+  return str.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function Breadcrumb() {
   const pathname = usePathname();
   if (!pathname || pathname === "/dashboard") return null;
@@ -20,7 +24,7 @@ export function Breadcrumb() {
   const segments = pathname.split("/").filter(Boolean);
   const items = segments.map((seg, i) => {
     const href = "/" + segments.slice(0, i + 1).join("/");
-    const label = routeLabels[seg] || seg.replace(/[-_]/g, " ");
+    const label = routeLabels[seg] || titleCase(seg);
     const isLast = i === segments.length - 1;
     return { href, label, isLast };
   });

@@ -103,28 +103,38 @@ const getStatusLabel = (status: number) => {
     return "Error";
   };
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function highlightJson(raw: string): string {
   try {
     JSON.parse(raw);
   } catch {
-    return raw;
+    return escapeHtml(raw);
   }
   return raw.replace(
     /("(?:\\.|[^"\\])*")\s*:|("(?:\\.|[^"\\])*")|(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)\b|\b(true|false|null)\b/g,
     (match, key, str, num, bool) => {
       if (key) {
-        return `<span class="text-[#5B5DFF]">${key}</span>:`;
+        const keyInner = key.slice(0, -1);
+        return `<span class="text-[#5B5DFF]">${escapeHtml(keyInner)}</span>:`;
       }
       if (str) {
-        return `<span class="text-[#00C2A8]">${str}</span>`;
+        return `<span class="text-[#00C2A8]">${escapeHtml(str)}</span>`;
       }
       if (num) {
-        return `<span class="text-[#F5B74F]">${num}</span>`;
+        return `<span class="text-[#F5B74F]">${escapeHtml(num)}</span>`;
       }
       if (bool) {
-        return `<span class="text-[#3A8DFF]">${bool}</span>`;
+        return `<span class="text-[#3A8DFF]">${escapeHtml(bool)}</span>`;
       }
-      return match;
+      return escapeHtml(match);
     },
   );
 }
@@ -386,12 +396,16 @@ export default function TestingPage() {
         parsedBody = requestBody;
       }
 
+      const headersWithAuth = authToken
+        ? { ...headersWithBodyMode, Authorization: `Bearer ${authToken}` }
+        : headersWithBodyMode;
+
       const payload: ExecuteRequest = {
         test_id: `web-${Date.now()}`,
         protocol,
         url,
         method: protocol === "websocket" ? undefined : method,
-        headers: headersWithBodyMode,
+        headers: headersWithAuth,
         body: parsedBody,
         follow_redirects: true,
         timeout_ms: 30000,

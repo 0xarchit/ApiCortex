@@ -7,6 +7,7 @@ import {
   useTransform,
   useScroll,
   useInView,
+  useMotionTemplate,
 } from "framer-motion";
 import type { SVGProps } from "react";
 import Link from "next/link";
@@ -25,11 +26,20 @@ import {
   Network,
 } from "lucide-react";
 
+const prefersReducedMotion =
+  typeof window !== "undefined" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 function useCountUp(target: number, duration = 1200, trigger = true) {
   const [value, setValue] = useState(0);
   const frameRef = useRef<number>(0);
   useEffect(() => {
     if (!trigger) return;
+    if (prefersReducedMotion) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentionally setting state once for reduced-motion users
+      setValue(target);
+      return;
+    }
     const start = performance.now();
     const animate = (now: number) => {
       const elapsed = now - start;
@@ -78,8 +88,14 @@ function TypewriterHeadline() {
   const [wordIndex, setWordIndex] = useState(0);
   const [charIndex, setCharIndex] = useState(0);
   const [deleting, setDeleting] = useState(false);
+  const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
+    if (prefersReducedMotion) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentionally setting state once for reduced-motion users
+      setCharIndex(typedWords[wordIndex].length);
+      return;
+    }
     const word = typedWords[wordIndex];
     const timeout = setTimeout(
       () => {
@@ -87,7 +103,8 @@ function TypewriterHeadline() {
           if (charIndex < word.length) {
             setCharIndex((c) => c + 1);
           } else {
-            setTimeout(() => setDeleting(true), 2000);
+            const pause = setTimeout(() => setDeleting(true), 2000);
+            timeoutsRef.current.push(pause);
           }
         } else {
           if (charIndex > 0) {
@@ -100,7 +117,11 @@ function TypewriterHeadline() {
       },
       deleting ? 40 : 80,
     );
-    return () => clearTimeout(timeout);
+    timeoutsRef.current.push(timeout);
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout);
+      timeoutsRef.current = [];
+    };
   }, [charIndex, deleting, wordIndex]);
 
   return (
@@ -118,6 +139,7 @@ function CursorGlow() {
   const springY = useSpring(mouseY, { stiffness: 100, damping: 30 });
 
   useEffect(() => {
+    if (prefersReducedMotion) return;
     const handler = (e: MouseEvent) => {
       mouseX.set(e.clientX);
       mouseY.set(e.clientY);
@@ -153,12 +175,14 @@ function TiltCard({
   const rotateY = useMotionValue(0);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
+  const xPercent = useMotionValue(50);
+  const yPercent = useMotionValue(50);
   const rx = useTransform(rotateX, [-1, 1], [-8, 8]);
   const ry = useTransform(rotateY, [-1, 1], [8, -8]);
 
   const handleMouse = useCallback(
     (e: React.MouseEvent) => {
-      if (!ref.current) return;
+      if (!ref.current || prefersReducedMotion) return;
       const rect = ref.current.getBoundingClientRect();
       const cx = e.clientX - rect.left - rect.width / 2;
       const cy = e.clientY - rect.top - rect.height / 2;
@@ -166,10 +190,13 @@ function TiltCard({
       rotateY.set(cx / (rect.width / 2));
       x.set(cx);
       y.set(cy);
+      xPercent.set((cx / rect.width) * 100 + 50);
+      yPercent.set((cy / rect.height) * 100 + 50);
     },
-    [rotateX, rotateY, x, y],
+    [rotateX, rotateY, x, y, xPercent, yPercent],
   );
 
+const bgStyle = useMotionTemplate`radial-gradient(circle at ${xPercent}% ${yPercent}%, rgba(91,93,255,0.15) 0%, transparent 60%)`;
   return (
     <motion.div
       ref={ref}
@@ -180,15 +207,15 @@ function TiltCard({
         rotateY.set(0);
         x.set(0);
         y.set(0);
+        xPercent.set(50);
+        yPercent.set(50);
       }}
       style={{ rotateX: rx, rotateY: ry }}
       transition={{ type: "spring", stiffness: 200, damping: 20 }}
     >
       <motion.div
         className="absolute inset-0 rounded-3xl pointer-events-none opacity-0 transition-opacity duration-300"
-        style={{
-          background: `radial-gradient(circle at ${x.get()}% ${y.get()}%, rgba(91,93,255,0.15) 0%, transparent 60%)`,
-        }}
+        style={{ background: bgStyle }}
       />
       {children}
     </motion.div>
@@ -950,10 +977,12 @@ export default function LandingPage() {
                   </motion.li>
                 ))}
               </ul>
-              <Button className="mt-4 bg-transparent border border-[#5B5DFF] text-[#5B5DFF] hover:bg-[#5B5DFF]/10 h-12 px-6 rounded-full group">
-                Explore the Docs{" "}
-                <ChevronRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-              </Button>
+              <Link href="/docs">
+                <Button className="mt-4 bg-transparent border border-[#5B5DFF] text-[#5B5DFF] hover:bg-[#5B5DFF]/10 h-12 px-6 rounded-full group">
+                  Explore the Docs{" "}
+                  <ChevronRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              </Link>
             </div>
           </div>
         </section>
@@ -1048,22 +1077,22 @@ export default function LandingPage() {
               <h4 className="text-white font-semibold mb-6">Product</h4>
               <ul className="space-y-4 text-sm text-[#9AA3B2]">
                 <li>
-                  <Link href="#" className="hover:text-white transition-colors">
+                  <Link href="/dashboard/testing" className="hover:text-white transition-colors">
                     API Testing
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="hover:text-white transition-colors">
+                  <Link href="/dashboard/telemetry" className="hover:text-white transition-colors">
                     Telemetry
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="hover:text-white transition-colors">
+                  <Link href="/dashboard/predictions" className="hover:text-white transition-colors">
                     Predictions
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="hover:text-white transition-colors">
+                  <Link href="/pricing" className="hover:text-white transition-colors">
                     Pricing
                   </Link>
                 </li>
@@ -1073,22 +1102,22 @@ export default function LandingPage() {
               <h4 className="text-white font-semibold mb-6">Developers</h4>
               <ul className="space-y-4 text-sm text-[#9AA3B2]">
                 <li>
-                  <Link href="#" className="hover:text-white transition-colors">
+                  <Link href="/docs" className="hover:text-white transition-colors">
                     Documentation
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="hover:text-white transition-colors">
+                  <Link href="/docs/reference" className="hover:text-white transition-colors">
                     API Reference
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="hover:text-white transition-colors">
+                  <Link href="/docs" className="hover:text-white transition-colors">
                     SDKs
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="hover:text-white transition-colors">
+                  <Link href="/status" className="hover:text-white transition-colors">
                     Status
                   </Link>
                 </li>
@@ -1098,22 +1127,22 @@ export default function LandingPage() {
               <h4 className="text-white font-semibold mb-6">Company</h4>
               <ul className="space-y-4 text-sm text-[#9AA3B2]">
                 <li>
-                  <Link href="#" className="hover:text-white transition-colors">
+                  <Link href="/about" className="hover:text-white transition-colors">
                     About
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="hover:text-white transition-colors">
+                  <Link href="/blog" className="hover:text-white transition-colors">
                     Blog
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="hover:text-white transition-colors">
+                  <Link href="https://github.com" className="hover:text-white transition-colors">
                     GitHub
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="hover:text-white transition-colors">
+                  <Link href="/contact" className="hover:text-white transition-colors">
                     Contact
                   </Link>
                 </li>
@@ -1125,10 +1154,10 @@ export default function LandingPage() {
               © 2026 ApiCortex, Inc. All rights reserved.
             </p>
             <div className="flex gap-6 text-sm text-[#9AA3B2]">
-              <Link href="#" className="hover:text-white transition-colors">
+              <Link href="/privacy" className="hover:text-white transition-colors">
                 Privacy Policy
               </Link>
-              <Link href="#" className="hover:text-white transition-colors">
+              <Link href="/terms" className="hover:text-white transition-colors">
                 Terms of Service
               </Link>
             </div>
@@ -1156,6 +1185,7 @@ function ParallaxCard({
   const springY = useSpring(y, { stiffness: 80, damping: 40 });
 
   useEffect(() => {
+    if (prefersReducedMotion) return;
     const handler = (e: MouseEvent) => {
       const cx = (e.clientX - window.innerWidth / 2) / window.innerWidth;
       const cy = (e.clientY - window.innerHeight / 2) / window.innerHeight;

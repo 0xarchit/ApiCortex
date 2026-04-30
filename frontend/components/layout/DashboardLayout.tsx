@@ -21,7 +21,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         )}
       >
         <Topbar />
-        <main className="flex-1 p-6 overflow-x-hidden relative flex flex-col min-w-0">
+        <main id="main-content" className="flex-1 p-6 overflow-x-hidden relative flex flex-col min-w-0">
           <div className="absolute top-0 left-0 w-full h-125 bg-linear-to-br from-[#5B5DFF]/3 via-transparent to-transparent pointer-events-none z-0" />
           <div className="relative z-10 flex-1 flex flex-col">
             <Breadcrumb />

@@ -149,13 +149,19 @@ export default function DashboardPage() {
     };
   }, [metrics]);
 
-  const apiCountAnimated = useCountUp(apiCount, 600);
+const apiCountAnimated = useCountUp(apiCount, 600);
   const endpointCountAnimated = useCountUp(endpointCount, 700);
   const requestCountAnimated = useCountUp(metrics?.request_count ?? 0, 1000);
-  const errorRateDisplay = (metrics?.error_rate ?? 0) * 100;
+  const errorRateDisplay = ((metrics?.error_rate ?? 0) * 100);
   const errorRateAnimated = useCountUp(errorRateDisplay, 800);
   const p95Latency = metrics?.p95_latency_ms ?? 0;
   const p95Animated = useCountUp(p95Latency, 800);
+
+  // TODO: Fetch real historical data from backend to compute actual deltas
+  const deltaApi = 0; // Placeholder: replace with (apiCount - yesterdayApiCount)
+  const deltaP95 = 0; // Placeholder: replace with actual latency change
+  const deltaError = 0; // Placeholder: replace with actual error rate change
+  const deltaRequests = 0; // Placeholder: replace with actual request count change
 
   const modules = [
     {
@@ -240,25 +246,25 @@ export default function DashboardPage() {
             <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
               {Math.round(apiCountAnimated)}
             </div>
-            <DeltaBadge value={apiCount > 0 ? 100 : 0} label="of configured" />
-          </CardContent>
-        </Card>
-        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#9AA3B2]">
-              Total Endpoints
-            </CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-[#00C2A8]/10 flex items-center justify-center">
-              <Database className="w-4 h-4 text-[#00C2A8]" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
-              {Math.round(endpointCountAnimated)}
-            </div>
-            <DeltaBadge value={endpointCount > 0 ? 100 : 0} label="of added" />
-          </CardContent>
-        </Card>
+<DeltaBadge value={deltaApi} label="vs yesterday" />
+            </CardContent>
+          </Card>
+          <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-[#9AA3B2]">
+                Total Endpoints
+              </CardTitle>
+              <div className="w-8 h-8 rounded-lg bg-[#00C2A8]/10 flex items-center justify-center">
+                <Database className="w-4 h-4 text-[#00C2A8]" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
+                {Math.round(endpointCountAnimated)}
+              </div>
+              <DeltaBadge value={0} label="vs yesterday" />
+            </CardContent>
+          </Card>
         <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-[#9AA3B2]">
@@ -272,48 +278,48 @@ export default function DashboardPage() {
             <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
               {p95Animated.toFixed(1)} ms
             </div>
-            <DeltaBadge
-              value={p95Latency < 300 ? -20 : 15}
-              label="vs yesterday"
-              positiveIsGood={false}
-            />
-          </CardContent>
-        </Card>
-        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#9AA3B2]">
-              Error Rate
-            </CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-[#F5B74F]/10 flex items-center justify-center">
-              <AlertTriangle className="w-4 h-4 text-[#F5B74F]" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
-              {errorRateAnimated.toFixed(2)}%
-            </div>
-            <DeltaBadge
-              value={errorRateDisplay < 2 ? -5 : 8}
-              label="vs yesterday"
-              positiveIsGood={false}
-            />
-          </CardContent>
-        </Card>
-        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-[#9AA3B2]">
-              Total Requests
-            </CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-[#00C2A8]/10 flex items-center justify-center">
-              <Activity className="w-4 h-4 text-[#00C2A8]" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
-              {Math.round(requestCountAnimated).toLocaleString()}
-            </div>
-            <DeltaBadge value={12} label="vs yesterday" />
-          </CardContent>
+<DeltaBadge
+                value={deltaP95}
+                label="vs yesterday"
+                positiveIsGood={false}
+              />
+            </CardContent>
+          </Card>
+          <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-[#9AA3B2]">
+                Error Rate
+              </CardTitle>
+              <div className="w-8 h-8 rounded-lg bg-[#F5B74F]/10 flex items-center justify-center">
+                <AlertTriangle className="w-4 h-4 text-[#F5B74F]" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
+                {errorRateAnimated.toFixed(2)}%
+              </div>
+              <DeltaBadge
+                value={deltaError}
+                label="vs yesterday"
+                positiveIsGood={false}
+              />
+            </CardContent>
+          </Card>
+          <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-[#9AA3B2]">
+                Total Requests
+              </CardTitle>
+              <div className="w-8 h-8 rounded-lg bg-[#00C2A8]/10 flex items-center justify-center">
+                <Activity className="w-4 h-4 text-[#00C2A8]" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
+                {Math.round(requestCountAnimated).toLocaleString()}
+              </div>
+              <DeltaBadge value={deltaRequests} label="vs yesterday" />
+            </CardContent>
         </Card>
       </div>
 

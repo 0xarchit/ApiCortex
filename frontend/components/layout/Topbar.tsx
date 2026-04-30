@@ -289,7 +289,7 @@ export function Topbar() {
                     onClick={() => setMobileOpen(false)}
                     prefetch
                     className={cn(
-                      "flex items-center gap-3 py-2.5 px-3 rounded-xl transition-all duration-200 text-sm font-medium",
+                      "flex items-center gap-3 py-2.5 px-3 rounded-xl transition-all duration-200 text-sm font-medium relative",
                       isActive
                         ? "bg-[#161A23] text-[#E6EAF2]"
                         : "text-[#9AA3B2] hover:bg-[#161A23] hover:text-[#E6EAF2]",

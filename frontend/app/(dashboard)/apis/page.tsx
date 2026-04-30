@@ -228,6 +228,14 @@ export default function ApisPage() {
       );
       return;
     }
+    // Validate base URL format when creating new domain
+    if (openApiTarget === "new" && openApiBaseUrl.trim()) {
+      const trimmedUrl = openApiBaseUrl.trim();
+      if (!trimmedUrl.startsWith("http://") && !trimmedUrl.startsWith("https://")) {
+        toast.error("Base URL must start with http:// or https://");
+        return;
+      }
+    }
     setUploadingOpenApi(true);
     try {
       const formData = new FormData();
@@ -621,27 +629,34 @@ export default function ApisPage() {
               >
                 JSON File
               </Label>
-              <div className="col-span-3">
-                <div
-                  className="relative border-2 border-dashed border-[#242938] rounded-lg p-4 text-center hover:border-[#5B5DFF]/50 transition-colors cursor-pointer"
-                  onClick={() =>
-                    document.getElementById("openApiFile")?.click()
-                  }
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setOpenApiFile(e.dataTransfer.files?.[0] || null);
-                  }}
-                >
-                  <Input
-                    id="openApiFile"
-                    type="file"
-                    accept="application/json"
-                    onChange={(event) =>
-                      setOpenApiFile(event.target.files?.[0] || null)
-                    }
-                    className="hidden"
-                  />
+<div className="col-span-3">
+          <div
+            className="relative border-2 border-dashed border-[#242938] rounded-lg p-4 text-center hover:border-[#5B5DFF]/50 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#5B5DFF]/50"
+            onClick={() => document.getElementById("openApiFile")?.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              setOpenApiFile(e.dataTransfer.files?.[0] || null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                document.getElementById("openApiFile")?.click();
+              }
+            }}
+            tabIndex={0}
+            role="button"
+            aria-label="Upload OpenAPI file. Click or drag and drop a JSON file here."
+          >
+            <Input
+              id="openApiFile"
+              type="file"
+              accept="application/json"
+              onChange={(event) =>
+                setOpenApiFile(event.target.files?.[0] || null)
+              }
+              className="hidden"
+            />
                   {openApiFile ? (
                     <div className="flex items-center justify-center gap-2 text-sm">
                       <FileJson className="w-4 h-4 text-[#5B5DFF] shrink-0" />
