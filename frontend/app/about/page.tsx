@@ -105,20 +105,22 @@ export default function AboutPage() {
             at any scale.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/login">
-              <Button className="h-12 px-8 bg-[#5B5DFF] hover:bg-[#5B5DFF]/90 text-white rounded-full font-medium text-base shadow-[0_0_30px_rgba(91,93,255,0.4)]">
-                Start for free
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
-            <Link href="/docs">
-              <Button
-                variant="outline"
-                className="h-12 px-8 rounded-full font-medium text-base"
-              >
-                Read the docs
-              </Button>
-            </Link>
+            <Button
+              nativeButton={false}
+              render={<Link href="/login" />}
+              className="h-12 px-8 bg-[#5B5DFF] hover:bg-[#5B5DFF]/90 text-white rounded-full font-medium text-base shadow-[0_0_30px_rgba(91,93,255,0.4)]"
+            >
+              Start for free
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            <Button
+              nativeButton={false}
+              render={<Link href="/docs" />}
+              variant="outline"
+              className="h-12 px-8 rounded-full font-medium text-base"
+            >
+              Read the docs
+            </Button>
           </div>
         </div>
       </section>
@@ -206,12 +208,14 @@ export default function AboutPage() {
           <p className="text-[#9AA3B2] text-lg mb-10">
             Start with the free tier. No credit card required.
           </p>
-          <Link href="/login">
-            <Button className="h-12 px-8 bg-[#5B5DFF] hover:bg-[#5B5DFF]/90 text-white rounded-full font-medium text-base shadow-[0_0_30px_rgba(91,93,255,0.4)]">
-              Get started for free
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </Link>
+          <Button
+            nativeButton={false}
+            render={<Link href="/login" />}
+            className="h-12 px-8 bg-[#5B5DFF] hover:bg-[#5B5DFF]/90 text-white rounded-full font-medium text-base shadow-[0_0_30px_rgba(91,93,255,0.4)]"
+          >
+            Get started for free
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
         </div>
       </section>
 

@@ -1,5 +1,11 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { DashboardMetrics } from "@/lib/api-types";
@@ -23,13 +29,56 @@ import {
   TrendingDown,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-function useCountUp(target: number, duration = 800) {
-  const [value, setValue] = useState(0);
+
+function usePrefersReducedMotion() {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof window === "undefined" || !window.matchMedia) {
+        return () => {};
+      }
+
+      const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+      const update = () => onStoreChange();
+
+      if (typeof mediaQuery.addEventListener === "function") {
+        mediaQuery.addEventListener("change", update);
+        return () => mediaQuery.removeEventListener("change", update);
+      }
+
+      mediaQuery.addListener(update);
+      return () => mediaQuery.removeListener(update);
+    },
+    () => {
+      if (typeof window === "undefined" || !window.matchMedia) {
+        return false;
+      }
+      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    },
+    () => false,
+  );
+}
+
+function useCountUp(target: number, duration = 800, reduceMotion = false) {
+  const [value, setValue] = useState(target);
   const frameRef = useRef<number>(0);
   const startValueRef = useRef<number>(0);
+  const currentValueRef = useRef(0);
 
   useEffect(() => {
+    currentValueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
+    cancelAnimationFrame(frameRef.current);
+
+    if (reduceMotion) {
+      startValueRef.current = target;
+      currentValueRef.current = target;
+      return;
+    }
+
     if (target === startValueRef.current) return;
+    startValueRef.current = currentValueRef.current;
     const startValue = startValueRef.current;
     const start = performance.now();
     const animate = (now: number) => {
@@ -42,13 +91,14 @@ function useCountUp(target: number, duration = 800) {
         frameRef.current = requestAnimationFrame(animate);
       } else {
         startValueRef.current = target;
+        currentValueRef.current = target;
       }
     };
     frameRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(frameRef.current);
-  }, [target, duration]);
+  }, [target, duration, reduceMotion]);
 
-  return value;
+  return reduceMotion ? target : value;
 }
 
 function DeltaBadge({
@@ -83,6 +133,7 @@ function DeltaBadge({
 }
 
 export default function DashboardPage() {
+  const reduceMotion = usePrefersReducedMotion();
   const metricsQuery = useQuery({
     queryKey: ["dashboard-summary", 24],
     queryFn: async () => {
@@ -160,13 +211,17 @@ export default function DashboardPage() {
     };
   }, [metrics]);
 
-const apiCountAnimated = useCountUp(apiCount, 600);
-  const endpointCountAnimated = useCountUp(endpointCount, 700);
-  const requestCountAnimated = useCountUp(metrics?.request_count ?? 0, 1000);
-  const errorRateDisplay = ((metrics?.error_rate ?? 0) * 100);
-  const errorRateAnimated = useCountUp(errorRateDisplay, 800);
+  const apiCountAnimated = useCountUp(apiCount, 600, reduceMotion);
+  const endpointCountAnimated = useCountUp(endpointCount, 700, reduceMotion);
+  const requestCountAnimated = useCountUp(
+    metrics?.request_count ?? 0,
+    1000,
+    reduceMotion,
+  );
+  const errorRateDisplay = (metrics?.error_rate ?? 0) * 100;
+  const errorRateAnimated = useCountUp(errorRateDisplay, 800, reduceMotion);
   const p95Latency = metrics?.p95_latency_ms ?? 0;
-  const p95Animated = useCountUp(p95Latency, 800);
+  const p95Animated = useCountUp(p95Latency, 800, reduceMotion);
 
   // TODO: Fetch real historical data from backend to compute actual deltas
   const deltaApi: number | null = null; // Placeholder: replace with (apiCount - yesterdayApiCount)
@@ -257,25 +312,29 @@ const apiCountAnimated = useCountUp(apiCount, 600);
             <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
               {Math.round(apiCountAnimated)}
             </div>
-            {deltaApi !== null && <DeltaBadge value={deltaApi} label="vs yesterday" />}
-            </CardContent>
-          </Card>
-          <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-[#9AA3B2]">
-                Total Endpoints
-              </CardTitle>
-              <div className="w-8 h-8 rounded-lg bg-[#00C2A8]/10 flex items-center justify-center">
-                <Database className="w-4 h-4 text-[#00C2A8]" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
-                {Math.round(endpointCountAnimated)}
-              </div>
-              <DeltaBadge value={0} label="vs yesterday" />
-            </CardContent>
-          </Card>
+            {deltaApi !== null && (
+              <DeltaBadge value={deltaApi} label="vs yesterday" />
+            )}
+          </CardContent>
+        </Card>
+        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-[#9AA3B2]">
+              Total Endpoints
+            </CardTitle>
+            <div className="w-8 h-8 rounded-lg bg-[#00C2A8]/10 flex items-center justify-center">
+              <Database className="w-4 h-4 text-[#00C2A8]" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
+              {Math.round(endpointCountAnimated)}
+            </div>
+            {deltaApi !== null && (
+              <DeltaBadge value={deltaApi} label="vs yesterday" />
+            )}
+          </CardContent>
+        </Card>
         <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-[#9AA3B2]">
@@ -296,45 +355,47 @@ const apiCountAnimated = useCountUp(apiCount, 600);
                 positiveIsGood={false}
               />
             )}
-            </CardContent>
-          </Card>
-          <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-[#9AA3B2]">
-                Error Rate
-              </CardTitle>
-              <div className="w-8 h-8 rounded-lg bg-[#F5B74F]/10 flex items-center justify-center">
-                <AlertTriangle className="w-4 h-4 text-[#F5B74F]" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
-                {errorRateAnimated.toFixed(2)}%
-              </div>
-              {deltaError !== null && (
-                <DeltaBadge
-                  value={deltaError}
-                  label="vs yesterday"
-                  positiveIsGood={false}
-                />
-              )}
-            </CardContent>
-          </Card>
-          <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-[#9AA3B2]">
-                Total Requests
-              </CardTitle>
-              <div className="w-8 h-8 rounded-lg bg-[#00C2A8]/10 flex items-center justify-center">
-                <Activity className="w-4 h-4 text-[#00C2A8]" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
-                {Math.round(requestCountAnimated).toLocaleString()}
-              </div>
-              {deltaRequests !== null && <DeltaBadge value={deltaRequests} label="vs yesterday" />}
-            </CardContent>
+          </CardContent>
+        </Card>
+        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-[#9AA3B2]">
+              Error Rate
+            </CardTitle>
+            <div className="w-8 h-8 rounded-lg bg-[#F5B74F]/10 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4 text-[#F5B74F]" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
+              {errorRateAnimated.toFixed(2)}%
+            </div>
+            {deltaError !== null && (
+              <DeltaBadge
+                value={deltaError}
+                label="vs yesterday"
+                positiveIsGood={false}
+              />
+            )}
+          </CardContent>
+        </Card>
+        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-[#9AA3B2]">
+              Total Requests
+            </CardTitle>
+            <div className="w-8 h-8 rounded-lg bg-[#00C2A8]/10 flex items-center justify-center">
+              <Activity className="w-4 h-4 text-[#00C2A8]" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
+              {Math.round(requestCountAnimated).toLocaleString()}
+            </div>
+            {deltaRequests !== null && (
+              <DeltaBadge value={deltaRequests} label="vs yesterday" />
+            )}
+          </CardContent>
         </Card>
       </div>
 
@@ -349,9 +410,11 @@ const apiCountAnimated = useCountUp(apiCount, 600);
                 className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold ${liveStatus.tone}`}
               >
                 <span className={`relative flex h-2.5 w-2.5`}>
-                  <span
-                    className={`animate-ping absolute inline-flex h-full w-full rounded-full ${liveStatus.pulse} opacity-75`}
-                  />
+                  {!reduceMotion ? (
+                    <span
+                      className={`animate-ping absolute inline-flex h-full w-full rounded-full ${liveStatus.pulse} opacity-75`}
+                    />
+                  ) : null}
                   <span
                     className={`relative inline-flex rounded-full h-2.5 w-2.5 ${liveStatus.pulse}`}
                   />

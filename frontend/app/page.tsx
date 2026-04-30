@@ -197,9 +197,8 @@ function TiltCard({
     [rotateX, rotateY, x, y, xPercent, yPercent],
   );
 
-const cursorOpacity = useTransform(
-    [x, y],
-    ([cx, cy]) => (Math.abs(cx as number) > 2 || Math.abs(cy as number) > 2 ? 1 : 0),
+  const cursorOpacity = useTransform([x, y], ([cx, cy]) =>
+    Math.abs(cx as number) > 2 || Math.abs(cy as number) > 2 ? 1 : 0,
   );
   const bgStyle = useMotionTemplate`radial-gradient(circle at ${xPercent}% ${yPercent}%, rgba(91,93,255,0.15) 0%, transparent 60%)`;
   return (
@@ -311,11 +310,13 @@ export default function LandingPage() {
             >
               Sign In
             </Link>
-            <Link href="/login">
-              <Button className="bg-[#5B5DFF]/10 text-[#5B5DFF] border border-[#5B5DFF]/30 hover:bg-[#5B5DFF]/20 backdrop-blur-md rounded-full px-6 transition-all">
-                Get Started
-              </Button>
-            </Link>
+            <Button
+              nativeButton={false}
+              render={<Link href="/login" />}
+              className="bg-[#5B5DFF]/10 text-[#5B5DFF] border border-[#5B5DFF]/30 hover:bg-[#5B5DFF]/20 backdrop-blur-md rounded-full px-6 transition-all"
+            >
+              Get Started
+            </Button>
           </div>
         </div>
       </nav>
@@ -325,9 +326,15 @@ export default function LandingPage() {
         <section className="relative min-h-[calc(100vh-4rem)] flex items-center py-14 lg:py-20 px-6">
           <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
             <motion.div
-              initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+              initial={
+                reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }
+              }
               animate={{ opacity: 1, y: 0 }}
-              transition={reduceMotion ? { duration: 0 } : { duration: 0.8, ease: "easeOut" }}
+              transition={
+                reduceMotion
+                  ? { duration: 0 }
+                  : { duration: 0.8, ease: "easeOut" }
+              }
             >
               <div className="inline-flex flex-row items-center justify-center p-1 rounded-full bg-[#161A23] border border-[#242938] mb-8 pr-4">
                 <span className="px-3 py-1 text-xs font-semibold bg-[#5B5DFF] text-white rounded-full mr-3 shadow-[0_0_10px_rgba(91,93,255,0.5)]">
@@ -349,28 +356,38 @@ export default function LandingPage() {
                 and validates contracts — so your APIs stay reliable at scale.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link href="/login">
-                  <Button className="h-14 px-8 bg-[#5B5DFF] hover:bg-[#5B5DFF]/90 text-white rounded-full font-medium text-lg w-full sm:w-auto shadow-[0_0_30px_rgba(91,93,255,0.4)] transition-all hover:scale-105">
-                    Start Testing APIs
-                    <ArrowRight className="w-5 h-5 ml-2" />
-                  </Button>
-                </Link>
-                <Link href="#terminal-demo">
-                  <Button
-                    variant="outline"
-                    className="h-14 px-8 border-[#242938] bg-[#161A23]/50 backdrop-blur-xl hover:bg-[#242938] text-white rounded-full font-medium text-lg w-full sm:w-auto transition-all"
-                  >
-                    View Demo
-                  </Button>
-                </Link>
+                <Button
+                  nativeButton={false}
+                  render={<Link href="/login" />}
+                  className="h-14 px-8 bg-[#5B5DFF] hover:bg-[#5B5DFF]/90 text-white rounded-full font-medium text-lg w-full sm:w-auto shadow-[0_0_30px_rgba(91,93,255,0.4)] transition-all hover:scale-105"
+                >
+                  Start Testing APIs
+                  <ArrowRight className="w-5 h-5 ml-2" />
+                </Button>
+                <Button
+                  nativeButton={false}
+                  render={<Link href="#terminal-demo" />}
+                  variant="outline"
+                  className="h-14 px-8 border-[#242938] bg-[#161A23]/50 backdrop-blur-xl hover:bg-[#242938] text-white rounded-full font-medium text-lg w-full sm:w-auto transition-all"
+                >
+                  View Demo
+                </Button>
               </div>
             </motion.div>
 
             {/* Parallax Hero Mockups */}
             <motion.div
-              initial={reduceMotion ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.95 }}
+              initial={
+                reduceMotion
+                  ? { opacity: 1, scale: 1 }
+                  : { opacity: 0, scale: 0.95 }
+              }
               animate={reduceMotion ? undefined : { opacity: 1, scale: 1 }}
-              transition={{ duration: reduceMotion ? 0 : 1, delay: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
+              transition={{
+                duration: reduceMotion ? 0 : 1,
+                delay: reduceMotion ? 0 : 0.2,
+                ease: "easeOut",
+              }}
               className="relative lg:h-150 flex items-center justify-center"
             >
               <ParallaxCard
@@ -410,9 +427,7 @@ export default function LandingPage() {
                   <motion.div
                     className="absolute inset-0 bg-linear-to-b from-transparent via-[#5B5DFF]/10 to-transparent"
                     animate={
-                      reduceMotion
-                        ? undefined
-                        : { top: ["-100%", "200%"] }
+                      reduceMotion ? undefined : { top: ["-100%", "200%"] }
                     }
                     transition={
                       reduceMotion
@@ -480,7 +495,11 @@ export default function LandingPage() {
                   strokeDasharray="2 2"
                   initial={reduceMotion ? { pathLength: 1 } : { pathLength: 0 }}
                   animate={reduceMotion ? undefined : { pathLength: 1 }}
-                  transition={reduceMotion ? {} : { duration: 2, repeat: Infinity, ease: "linear" }}
+                  transition={
+                    reduceMotion
+                      ? {}
+                      : { duration: 2, repeat: Infinity, ease: "linear" }
+                  }
                 />
                 <motion.path
                   d="M10,80 Q30,60 60,80 T90,20"
@@ -488,9 +507,19 @@ export default function LandingPage() {
                   stroke="#00C2A8"
                   strokeWidth="0.5"
                   strokeDasharray="2 2"
-                  initial={reduceMotion ? { pathLength: 1, opacity: 1 } : { pathLength: 0, opacity: 0.5 }}
-                  animate={reduceMotion ? undefined : { pathLength: 1, opacity: 1 }}
-                  transition={reduceMotion ? {} : { duration: 3, repeat: Infinity, ease: "linear" }}
+                  initial={
+                    reduceMotion
+                      ? { pathLength: 1, opacity: 1 }
+                      : { pathLength: 0, opacity: 0.5 }
+                  }
+                  animate={
+                    reduceMotion ? undefined : { pathLength: 1, opacity: 1 }
+                  }
+                  transition={
+                    reduceMotion
+                      ? {}
+                      : { duration: 3, repeat: Infinity, ease: "linear" }
+                  }
                 />
               </svg>
             </motion.div>
@@ -581,7 +610,9 @@ export default function LandingPage() {
                           <motion.div
                             key={i}
                             className={`w-full rounded-t-sm ${h > 70 ? "bg-[#FF5C5C]" : "bg-[#5B5DFF]"}`}
-                            initial={reduceMotion ? { height: `${h}%` } : { height: 0 }}
+                            initial={
+                              reduceMotion ? { height: `${h}%` } : { height: 0 }
+                            }
                             animate={
                               reduceMotion
                                 ? undefined
@@ -692,10 +723,19 @@ export default function LandingPage() {
               ].map((feature, i) => (
                 <TiltCard key={i}>
                   <motion.div
-                    initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
-                    whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+                    initial={
+                      reduceMotion
+                        ? { opacity: 1, y: 0 }
+                        : { opacity: 0, y: 30 }
+                    }
+                    whileInView={
+                      reduceMotion ? undefined : { opacity: 1, y: 0 }
+                    }
                     viewport={reduceMotion ? undefined : { once: true }}
-                    transition={{ duration: reduceMotion ? 0 : 0.5, delay: reduceMotion ? 0 : i * 0.1 }}
+                    transition={{
+                      duration: reduceMotion ? 0 : 0.5,
+                      delay: reduceMotion ? 0 : i * 0.1,
+                    }}
                     className="group relative bg-[#161A23] border border-[#242938] rounded-3xl p-8 hover:border-[#5B5DFF]/50 transition-colors overflow-hidden flex flex-col h-87.5"
                   >
                     <div
@@ -756,10 +796,15 @@ export default function LandingPage() {
               ].map((item, i) => (
                 <motion.div
                   key={i}
-                  initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+                  initial={
+                    reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }
+                  }
                   whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
                   viewport={reduceMotion ? undefined : { once: true }}
-                  transition={{ duration: reduceMotion ? 0 : 0.5, delay: reduceMotion ? 0 : i * 0.15 }}
+                  transition={{
+                    duration: reduceMotion ? 0 : 0.5,
+                    delay: reduceMotion ? 0 : i * 0.15,
+                  }}
                   className="relative z-10 flex flex-col items-center text-center w-full md:w-1/4 px-4 mb-12 md:mb-0"
                 >
                   <div className="w-24 h-24 rounded-full bg-[#0F1117] border-2 border-[#242938] flex flex-col items-center justify-center mb-6 shadow-xl relative overflow-hidden group">
@@ -795,7 +840,7 @@ export default function LandingPage() {
                 Try the interactive terminal below. No signup required.
               </p>
             </div>
-            <TerminalDemo />
+            <TerminalDemo reduceMotion={reduceMotion} />
           </div>
         </section>
 
@@ -816,7 +861,9 @@ export default function LandingPage() {
             </div>
             <div className="grid md:grid-cols-2 gap-8">
               <motion.div
-                initial={reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
+                initial={
+                  reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }
+                }
                 whileInView={reduceMotion ? undefined : { opacity: 1, x: 0 }}
                 viewport={reduceMotion ? undefined : { once: true }}
                 transition={{ duration: reduceMotion ? 0 : 0.6 }}
@@ -850,8 +897,10 @@ export default function LandingPage() {
                   </div>
                 </div>
               </motion.div>
-<motion.div
-                initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+              <motion.div
+                initial={
+                  reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }
+                }
                 whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
                 viewport={reduceMotion ? undefined : { once: true }}
                 transition={{ duration: reduceMotion ? 0 : 0.5 }}
@@ -897,7 +946,9 @@ export default function LandingPage() {
         >
           <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
             <motion.div
-              initial={reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
+              initial={
+                reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }
+              }
               whileInView={reduceMotion ? undefined : { opacity: 1, x: 0 }}
               viewport={reduceMotion ? undefined : { once: true }}
               transition={{ duration: reduceMotion ? 0 : 0.8 }}
@@ -980,10 +1031,19 @@ export default function LandingPage() {
                 ].map((item, i) => (
                   <motion.li
                     key={i}
-                    initial={reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: 10 }}
-                    whileInView={reduceMotion ? undefined : { opacity: 1, x: 0 }}
+                    initial={
+                      reduceMotion
+                        ? { opacity: 1, x: 0 }
+                        : { opacity: 0, x: 10 }
+                    }
+                    whileInView={
+                      reduceMotion ? undefined : { opacity: 1, x: 0 }
+                    }
                     viewport={reduceMotion ? undefined : { once: true }}
-                    transition={{ duration: reduceMotion ? 0 : 0.3, delay: reduceMotion ? 0 : i * 0.1 }}
+                    transition={{
+                      duration: reduceMotion ? 0 : 0.3,
+                      delay: reduceMotion ? 0 : i * 0.1,
+                    }}
                     className="flex items-center gap-3 text-white"
                   >
                     <div className="w-6 h-6 rounded-full bg-[#5B5DFF]/20 flex shrink-0 items-center justify-center">
@@ -1045,12 +1105,14 @@ export default function LandingPage() {
               insights and contract validation in seconds.
             </p>
             <div className="flex flex-col items-center gap-4">
-              <Link href="/login">
-                <Button className="h-16 px-10 bg-white text-[#0F1117] hover:bg-[#F8F9FA] rounded-full font-bold text-lg shadow-[0_0_40px_rgba(255,255,255,0.2)] hover:scale-105 transition-all">
-                  Start Using ApiCortex
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </Button>
-              </Link>
+              <Button
+                nativeButton={false}
+                render={<Link href="/login" />}
+                className="h-16 px-10 bg-white text-[#0F1117] hover:bg-[#F8F9FA] rounded-full font-bold text-lg shadow-[0_0_40px_rgba(255,255,255,0.2)] hover:scale-105 transition-all"
+              >
+                Start Using ApiCortex
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </Button>
               <p className="text-sm text-[#9AA3B2]">
                 Free tier available. No credit card required.
               </p>
@@ -1093,22 +1155,34 @@ export default function LandingPage() {
               <h4 className="text-white font-semibold mb-6">Product</h4>
               <ul className="space-y-4 text-sm text-[#9AA3B2]">
                 <li>
-                  <Link href="/dashboard/testing" className="hover:text-white transition-colors">
+                  <Link
+                    href="/dashboard/testing"
+                    className="hover:text-white transition-colors"
+                  >
                     API Testing
                   </Link>
                 </li>
                 <li>
-                  <Link href="/dashboard/telemetry" className="hover:text-white transition-colors">
+                  <Link
+                    href="/dashboard/telemetry"
+                    className="hover:text-white transition-colors"
+                  >
                     Telemetry
                   </Link>
                 </li>
                 <li>
-                  <Link href="/dashboard/predictions" className="hover:text-white transition-colors">
+                  <Link
+                    href="/dashboard/predictions"
+                    className="hover:text-white transition-colors"
+                  >
                     Predictions
                   </Link>
                 </li>
                 <li>
-                  <Link href="/pricing" className="hover:text-white transition-colors">
+                  <Link
+                    href="/pricing"
+                    className="hover:text-white transition-colors"
+                  >
                     Pricing
                   </Link>
                 </li>
@@ -1118,22 +1192,34 @@ export default function LandingPage() {
               <h4 className="text-white font-semibold mb-6">Developers</h4>
               <ul className="space-y-4 text-sm text-[#9AA3B2]">
                 <li>
-                  <Link href="/docs" className="hover:text-white transition-colors">
+                  <Link
+                    href="/docs"
+                    className="hover:text-white transition-colors"
+                  >
                     Documentation
                   </Link>
                 </li>
                 <li>
-                  <Link href="/docs/reference" className="hover:text-white transition-colors">
+                  <Link
+                    href="/docs/reference"
+                    className="hover:text-white transition-colors"
+                  >
                     API Reference
                   </Link>
                 </li>
                 <li>
-                  <Link href="/docs" className="hover:text-white transition-colors">
+                  <Link
+                    href="/docs"
+                    className="hover:text-white transition-colors"
+                  >
                     SDKs
                   </Link>
                 </li>
                 <li>
-                  <Link href="/status" className="hover:text-white transition-colors">
+                  <Link
+                    href="/status"
+                    className="hover:text-white transition-colors"
+                  >
                     Status
                   </Link>
                 </li>
@@ -1143,22 +1229,34 @@ export default function LandingPage() {
               <h4 className="text-white font-semibold mb-6">Company</h4>
               <ul className="space-y-4 text-sm text-[#9AA3B2]">
                 <li>
-                  <Link href="/about" className="hover:text-white transition-colors">
+                  <Link
+                    href="/about"
+                    className="hover:text-white transition-colors"
+                  >
                     About
                   </Link>
                 </li>
                 <li>
-                  <Link href="/blog" className="hover:text-white transition-colors">
+                  <Link
+                    href="/blog"
+                    className="hover:text-white transition-colors"
+                  >
                     Blog
                   </Link>
                 </li>
                 <li>
-                  <Link href="https://github.com" className="hover:text-white transition-colors">
+                  <Link
+                    href="https://github.com"
+                    className="hover:text-white transition-colors"
+                  >
                     GitHub
                   </Link>
                 </li>
                 <li>
-                  <Link href="/contact" className="hover:text-white transition-colors">
+                  <Link
+                    href="/contact"
+                    className="hover:text-white transition-colors"
+                  >
                     Contact
                   </Link>
                 </li>
@@ -1170,10 +1268,16 @@ export default function LandingPage() {
               © 2026 ApiCortex, Inc. All rights reserved.
             </p>
             <div className="flex gap-6 text-sm text-[#9AA3B2]">
-              <Link href="/privacy" className="hover:text-white transition-colors">
+              <Link
+                href="/privacy"
+                className="hover:text-white transition-colors"
+              >
                 Privacy Policy
               </Link>
-              <Link href="/terms" className="hover:text-white transition-colors">
+              <Link
+                href="/terms"
+                className="hover:text-white transition-colors"
+              >
                 Terms of Service
               </Link>
             </div>
@@ -1219,7 +1323,7 @@ function ParallaxCard({
   );
 }
 
-function TerminalDemo() {
+function TerminalDemo({ reduceMotion }: { reduceMotion: boolean }) {
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<
     { type: "input" | "output"; text: string }[]
@@ -1274,10 +1378,10 @@ function TerminalDemo() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.6 }}
+      initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+      whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+      viewport={reduceMotion ? undefined : { once: true }}
+      transition={reduceMotion ? { duration: 0 } : { duration: 0.6 }}
       className="bg-[#161A23] border border-[#00C2A8]/30 rounded-2xl overflow-hidden"
     >
       <div className="h-10 border-b border-[#242938] bg-[#161A23] flex items-center px-4 gap-2">
@@ -1308,7 +1412,10 @@ function TerminalDemo() {
         {step < commands.length && (
           <div className="flex items-center mt-1">
             <span className="text-[#5B5DFF]">$ </span>
-            <span id="terminal-cmd-hint" className="text-[#9AA3B2]/50 text-xs mr-2">
+            <span
+              id="terminal-cmd-hint"
+              className="text-[#9AA3B2]/50 text-xs mr-2"
+            >
               (type: {commands[step].cmd})
             </span>
             <input

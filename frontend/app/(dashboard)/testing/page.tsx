@@ -121,8 +121,7 @@ function highlightJson(raw: string): string {
     /("(?:\\.|[^"\\])*")\s*:|("(?:\\.|[^"\\])*")|(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)\b|\b(true|false|null)\b/g,
     (match, key, str, num, bool) => {
       if (key) {
-        const keyInner = key.slice(0, -1);
-        return `<span class="text-[#5B5DFF]">${escapeHtml(keyInner)}</span>:`;
+        return `<span class="text-[#5B5DFF]">${escapeHtml(key)}</span>:`;
       }
       if (str) {
         return `<span class="text-[#00C2A8]">${escapeHtml(str)}</span>`;
@@ -177,6 +176,61 @@ export default function TestingPage() {
     }[]
   >([]);
   const [authToken, setAuthToken] = useState("");
+  const testerStateKey = "apicortex_tester_state";
+
+  const sanitizeHeaderRows = (rows: unknown): HeaderRow[] => {
+    if (!Array.isArray(rows)) {
+      return [];
+    }
+
+    return rows.filter((row): row is HeaderRow => {
+      if (!row || typeof row !== "object") {
+        return false;
+      }
+
+      const candidate = row as HeaderRow;
+      if (
+        typeof candidate.id !== "string" ||
+        typeof candidate.enabled !== "boolean" ||
+        typeof candidate.key !== "string" ||
+        typeof candidate.value !== "string"
+      ) {
+        return false;
+      }
+
+      const headerName = candidate.key.trim().toLowerCase();
+      if (
+        headerName === "authorization" ||
+        headerName === "cookie" ||
+        headerName === "set-cookie" ||
+        headerName === "proxy-authorization" ||
+        headerName.includes("token") ||
+        headerName.includes("key") ||
+        headerName.includes("secret")
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+  };
+
+  const getStoredTesterState = () => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    const sessionValue = sessionStorage.getItem(testerStateKey);
+    if (sessionValue) {
+      return sessionValue;
+    }
+
+    const legacyValue = localStorage.getItem(testerStateKey);
+    if (legacyValue) {
+      localStorage.removeItem(testerStateKey);
+    }
+    return legacyValue;
+  };
 
   const getQueryParams = () => {
     if (typeof window === "undefined")
@@ -283,17 +337,26 @@ export default function TestingPage() {
   };
 
   useEffect(() => {
-    const saved = localStorage.getItem("apicortex_tester_state");
+    const saved = getStoredTesterState();
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.url) setUrl(parsed.url);
         if (parsed.method) setMethod(parsed.method);
         if (parsed.protocol) setProtocol(parsed.protocol);
-        if (parsed.headerRows) setHeaderRows(parsed.headerRows);
-        if (parsed.body) setRequestBody(parsed.body);
         if (parsed.bodyMode) setBodyMode(parsed.bodyMode);
-        if (parsed.requestHistory) setRequestHistory(parsed.requestHistory);
+        const restoredRows = sanitizeHeaderRows(parsed.headerRows);
+        if (restoredRows.length > 0) {
+          setHeaderRows(restoredRows);
+          const maxHeaderId = restoredRows.reduce((max, row) => {
+            const match = /^header-(\d+)$/.exec(row.id);
+            if (!match) {
+              return max;
+            }
+            return Math.max(max, Number.parseInt(match[1], 10));
+          }, 0);
+          headerIdCounter.current = maxHeaderId + 1;
+        }
       } catch {}
     }
   }, []);
@@ -303,35 +366,12 @@ export default function TestingPage() {
       url,
       method,
       protocol,
-      headerRows,
-      body: requestBody,
       bodyMode,
-      requestHistory,
     };
-    localStorage.setItem("apicortex_tester_state", JSON.stringify(state));
+    sessionStorage.setItem(testerStateKey, JSON.stringify(state));
+    localStorage.removeItem(testerStateKey);
     toast.success("State saved to browser storage.");
   };
-
-  useEffect(() => {
-    const qp = getQueryParams();
-    const qpUrl = qp.url;
-    const qpMethod = qp.method;
-    const qpProtocol = qp.protocol;
-
-    if (qpUrl) {
-      setUrl(qpUrl);
-    }
-    if (qpMethod) {
-      setMethod(qpMethod.toUpperCase());
-    }
-    if (
-      qpProtocol === "http" ||
-      qpProtocol === "graphql" ||
-      qpProtocol === "websocket"
-    ) {
-      setProtocol(qpProtocol);
-    }
-  }, []);
 
   const addHeaderRow = () => {
     setHeaderRows((prev) => [...prev, createHeaderRow()]);
@@ -702,7 +742,11 @@ export default function TestingPage() {
             </Button>
             {requestHistory.length > 0 && (
               <DropdownMenu>
-                <DropdownMenuTrigger className="shrink-0 border border-[#242938] text-[#9AA3B2] hover:text-[#E6EAF2] hover:bg-[#242938] rounded-md px-2 py-1.5 inline-flex items-center justify-center">
+                <DropdownMenuTrigger
+                  aria-label="Open request history"
+                  title="Open request history"
+                  className="shrink-0 border border-[#242938] text-[#9AA3B2] hover:text-[#E6EAF2] hover:bg-[#242938] rounded-md px-2 py-1.5 inline-flex items-center justify-center"
+                >
                   <Clock className="w-4 h-4" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="bg-[#161A23] border-[#242938] text-[#E6EAF2] max-h-64 overflow-y-auto">

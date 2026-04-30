@@ -342,33 +342,33 @@ export default function ProfilePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Link href="/settings">
-              <Button
-                variant="outline"
-                className="w-full justify-between border-[#242938] text-[#E6EAF2] hover:bg-[#242938]"
-              >
-                Account Settings
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <Link href="/testing">
-              <Button
-                variant="outline"
-                className="w-full justify-between border-[#242938] text-[#E6EAF2] hover:bg-[#242938]"
-              >
-                API Testing Workspace
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <Link href="/apis">
-              <Button
-                variant="outline"
-                className="w-full justify-between border-[#242938] text-[#E6EAF2] hover:bg-[#242938]"
-              >
-                My API Domains
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
+            <Button
+              nativeButton={false}
+              render={<Link href="/settings" />}
+              variant="outline"
+              className="w-full justify-between border-[#242938] text-[#E6EAF2] hover:bg-[#242938]"
+            >
+              Account Settings
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+            <Button
+              nativeButton={false}
+              render={<Link href="/testing" />}
+              variant="outline"
+              className="w-full justify-between border-[#242938] text-[#E6EAF2] hover:bg-[#242938]"
+            >
+              API Testing Workspace
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+            <Button
+              nativeButton={false}
+              render={<Link href="/apis" />}
+              variant="outline"
+              className="w-full justify-between border-[#242938] text-[#E6EAF2] hover:bg-[#242938]"
+            >
+              My API Domains
+              <ArrowRight className="w-4 h-4" />
+            </Button>
           </CardContent>
         </Card>
       </div>

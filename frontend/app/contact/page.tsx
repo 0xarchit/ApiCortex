@@ -18,9 +18,27 @@ export default function ContactPage() {
     if (!name.trim() || !email.trim() || !message.trim()) return;
     setFormState("submitting");
     try {
-      await new Promise((r) => setTimeout(r, 1000));
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          message: message.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Contact request failed with status ${response.status}`,
+        );
+      }
+
       setFormState("success");
-    } catch {
+    } catch (error) {
+      console.error("Failed to send contact message", error);
       setFormState("error");
     }
   };
@@ -39,7 +57,8 @@ export default function ContactPage() {
               Get in touch
             </h1>
             <p className="text-xl text-[#9AA3B2] max-w-xl mx-auto leading-relaxed">
-              Questions, feedback, bug reports, or partnership ideas — we&apos;d love to hear from you.
+              Questions, feedback, bug reports, or partnership ideas — we&apos;d
+              love to hear from you.
             </p>
           </div>
 
@@ -122,9 +141,7 @@ export default function ContactPage() {
                     <div className="w-16 h-16 rounded-full bg-[#00C2A8]/10 flex items-center justify-center mb-6">
                       <CheckCircle2 className="w-8 h-8 text-[#00C2A8]" />
                     </div>
-                    <h3 className="text-xl font-bold mb-2">
-                      Message sent!
-                    </h3>
+                    <h3 className="text-xl font-bold mb-2">Message sent!</h3>
                     <p className="text-[#9AA3B2] mb-6">
                       We&apos;ll get back to you at {email} within 24 hours.
                     </p>
@@ -139,7 +156,10 @@ export default function ContactPage() {
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-5">
                     <div>
-                      <label htmlFor="contact-name" className="block text-sm font-medium text-[#9AA3B2] mb-1.5">
+                      <label
+                        htmlFor="contact-name"
+                        className="block text-sm font-medium text-[#9AA3B2] mb-1.5"
+                      >
                         Your name
                       </label>
                       <Input
@@ -152,7 +172,10 @@ export default function ContactPage() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="contact-email" className="block text-sm font-medium text-[#9AA3B2] mb-1.5">
+                      <label
+                        htmlFor="contact-email"
+                        className="block text-sm font-medium text-[#9AA3B2] mb-1.5"
+                      >
                         Email address
                       </label>
                       <Input
@@ -166,7 +189,10 @@ export default function ContactPage() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="contact-message" className="block text-sm font-medium text-[#9AA3B2] mb-1.5">
+                      <label
+                        htmlFor="contact-message"
+                        className="block text-sm font-medium text-[#9AA3B2] mb-1.5"
+                      >
                         How can we help?
                       </label>
                       <textarea
@@ -181,7 +207,8 @@ export default function ContactPage() {
                     </div>
                     {formState === "error" && (
                       <p className="text-sm text-[#FF5C5C]">
-                        Something went wrong. Please try again or email us directly.
+                        Something went wrong. Please try again or email us
+                        directly.
                       </p>
                     )}
                     <Button
@@ -219,7 +246,10 @@ export default function ContactPage() {
             <Link href="/about" className="hover:text-white transition-colors">
               About
             </Link>
-            <Link href="/privacy" className="hover:text-white transition-colors">
+            <Link
+              href="/privacy"
+              className="hover:text-white transition-colors"
+            >
               Privacy Policy
             </Link>
           </div>
