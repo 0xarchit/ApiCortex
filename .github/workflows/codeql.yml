@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: '8 5 * * 0'
+    - cron: '8 5 * * 0' 
 
 jobs:
   detect-changes:
@@ -16,11 +16,11 @@ jobs:
       languages: ${{ steps.set-languages.outputs.languages }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Filter Paths
         id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             javascript:
@@ -29,7 +29,6 @@ jobs:
               - '**/*.js'
               - '**/*.ts'
               - '**/*.tsx'
-              - '**/*.jsx'
             python:
               - 'control-plane/**'
               - 'ml-service/**'
@@ -93,17 +92,19 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
+          config: |
+            threat-models: remote
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{matrix.language}}"
