@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -140,7 +139,6 @@ function highlightJson(raw: string): string {
 }
 
 export default function TestingPage() {
-  const searchParams = useSearchParams();
   const [protocol, setProtocol] = useState<"http" | "graphql" | "websocket">(
     "http",
   );
@@ -163,7 +161,37 @@ export default function TestingPage() {
   const [requestHistory, setRequestHistory] = useState<
     { url: string; method: string; protocol: string; body: string; bodyMode: string; timestamp: number }[]
   >([]);
-  const [authToken, setAuthToken] = useState("");
+const [authToken, setAuthToken] = useState("");
+
+  const getQueryParams = () => {
+    if (typeof window === 'undefined') return { url: null, method: null, protocol: null };
+    const params = new URLSearchParams(window.location.search);
+    return {
+      url: params.get("url"),
+      method: params.get("method"),
+      protocol: params.get("protocol"),
+    };
+  };
+
+  useEffect(() => {
+    const qpUrl = getQueryParams().url;
+    const qpMethod = getQueryParams().method;
+    const qpProtocol = getQueryParams().protocol;
+
+    if (qpUrl) {
+      setUrl(qpUrl);
+    }
+    if (qpMethod) {
+      setMethod(qpMethod.toUpperCase());
+    }
+    if (
+      qpProtocol === "http" ||
+      qpProtocol === "graphql" ||
+      qpProtocol === "websocket"
+    ) {
+      setProtocol(qpProtocol);
+    }
+  }, []);
 
   const domainsQuery = useQuery({
     queryKey: ["testing-domains"],
@@ -269,9 +297,10 @@ export default function TestingPage() {
   };
 
   useEffect(() => {
-    const qpUrl = searchParams.get("url");
-    const qpMethod = searchParams.get("method");
-    const qpProtocol = searchParams.get("protocol");
+    const qp = getQueryParams();
+    const qpUrl = qp.url;
+    const qpMethod = qp.method;
+    const qpProtocol = qp.protocol;
 
     if (qpUrl) {
       setUrl(qpUrl);
@@ -286,7 +315,7 @@ export default function TestingPage() {
     ) {
       setProtocol(qpProtocol);
     }
-  }, [searchParams]);
+  }, []);
 
   const addHeaderRow = () => {
     setHeaderRows((prev) => [
