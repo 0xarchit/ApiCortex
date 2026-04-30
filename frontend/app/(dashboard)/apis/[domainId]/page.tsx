@@ -30,6 +30,8 @@ import {
   ArrowLeft,
   PauseCircle,
   PlayCircle,
+  Copy,
+  Check,
 } from "lucide-react";
 import {
   Dialog,
@@ -47,6 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiClient } from "@/lib/api-client";
 import { API, Endpoint } from "@/lib/api-types";
@@ -63,6 +66,14 @@ export default function DomainDetailsPage() {
   const [editingEndpointId, setEditingEndpointId] = useState<string | null>(
     null,
   );
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyBaseUrl = async () => {
+    if (!domain?.base_url) return;
+    await navigator.clipboard.writeText(domain.base_url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
   const domainQuery = useQuery({
     queryKey: ["api-domain", domainId],
     queryFn: async () => {
@@ -160,7 +171,14 @@ export default function DomainDetailsPage() {
     setIsEndpointModalOpen(true);
   };
   const handleSaveEndpoint = async () => {
-    if (!endpointFormPath) return;
+    if (!endpointFormPath.trim()) {
+      toast.error("Endpoint path is required.");
+      return;
+    }
+    if (!endpointFormPath.startsWith("/")) {
+      toast.error("Path must start with /");
+      return;
+    }
     try {
       if (editingEndpointId) {
         await apiClient.patch(`/endpoints/${editingEndpointId}`, {
@@ -224,8 +242,15 @@ export default function DomainDetailsPage() {
             <h1 className="text-3xl font-bold text-[#E6EAF2] tracking-tight">
               {domain?.name} Endpoints
             </h1>
-            <p className="text-[#9AA3B2] mt-1 font-mono text-sm">
+            <p className="text-[#9AA3B2] mt-1 font-mono text-sm flex items-center gap-2">
               {domain?.base_url}
+              <button
+                onClick={(e) => { e.stopPropagation(); handleCopyBaseUrl(); }}
+                className="text-[#9AA3B2] hover:text-[#E6EAF2] transition-colors"
+                title="Copy base URL"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-[#00C2A8]" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
             </p>
           </div>
           <Button

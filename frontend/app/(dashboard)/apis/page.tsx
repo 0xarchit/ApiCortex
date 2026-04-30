@@ -22,7 +22,18 @@ import {
   DropdownMenuTrigger,
   DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
-import { Search, MoreHorizontal, Trash2, Edit2, Globe } from "lucide-react";
+import {
+  Search,
+  MoreHorizontal,
+  Trash2,
+  Edit2,
+  Globe,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  FileJson,
+  XCircle,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +59,10 @@ export default function ApisPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortKey, setSortKey] = useState<
+    "name" | "created_at" | "endpointsCount" | ""
+  >("");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [isDomainModalOpen, setIsDomainModalOpen] = useState(false);
   const [isOpenApiModalOpen, setIsOpenApiModalOpen] = useState(false);
   const [openApiVersion, setOpenApiVersion] = useState("1.0.0");
@@ -59,6 +74,8 @@ export default function ApisPage() {
   const [domainFormUrl, setDomainFormUrl] = useState("");
   const [domainFormName, setDomainFormName] = useState("");
   const [editingDomainId, setEditingDomainId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleteTargetName, setDeleteTargetName] = useState("");
 
   const domainsQuery = useQuery({
     queryKey: ["apis-domains"],
@@ -95,6 +112,32 @@ export default function ApisPage() {
       d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.base_url.toLowerCase().includes(searchQuery.toLowerCase()),
   );
+  const sortedDomains = [...filteredDomains].sort((a, b) => {
+    if (!sortKey) return 0;
+    let cmp = 0;
+    if (sortKey === "name") cmp = a.name.localeCompare(b.name);
+    else if (sortKey === "endpointsCount")
+      cmp = a.endpointsCount - b.endpointsCount;
+    else if (sortKey === "created_at")
+      cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+  const handleSort = (key: typeof sortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+  const SortIcon = ({ column }: { column: typeof sortKey }) => {
+    if (sortKey !== column)
+      return <ArrowUpDown className="w-3 h-3 ml-1 text-[#9AA3B2]/50" />;
+    return sortDir === "asc" ? (
+      <ArrowUp className="w-3 h-3 ml-1 text-[#5B5DFF]" />
+    ) : (
+      <ArrowDown className="w-3 h-3 ml-1 text-[#5B5DFF]" />
+    );
+  };
   const openAddDomain = () => {
     setEditingDomainId(null);
     setDomainFormName("");
@@ -117,7 +160,17 @@ export default function ApisPage() {
     setIsDomainModalOpen(true);
   };
   const handleSaveDomain = async () => {
-    if (!domainFormName || !domainFormUrl) return;
+    if (!domainFormName.trim() || !domainFormUrl.trim()) {
+      toast.error("Name and Base URL are required.");
+      return;
+    }
+    if (
+      !domainFormUrl.startsWith("http://") &&
+      !domainFormUrl.startsWith("https://")
+    ) {
+      toast.error("Base URL must start with http:// or https://");
+      return;
+    }
     try {
       if (editingDomainId) {
         await apiClient.patch(`/apis/${editingDomainId}`, {
@@ -132,17 +185,29 @@ export default function ApisPage() {
       }
       await queryClient.invalidateQueries({ queryKey: ["apis-domains"] });
       setIsDomainModalOpen(false);
-    } catch (error) {
-      console.error(error);
+    } catch {
+      toast.error("Failed to save domain.");
     }
   };
-  const handleDeleteDomain = async (e: React.MouseEvent, id: string) => {
+  const handleDeleteDomain = async (
+    e: React.MouseEvent,
+    id: string,
+    name: string,
+  ) => {
     e.stopPropagation();
+    setDeleteTargetId(id);
+    setDeleteTargetName(name);
+  };
+  const confirmDeleteDomain = async () => {
+    if (!deleteTargetId) return;
     try {
-      await apiClient.delete(`/apis/${id}`);
+      await apiClient.delete(`/apis/${deleteTargetId}`);
       await queryClient.invalidateQueries({ queryKey: ["apis-domains"] });
-    } catch (error) {
-      console.error(error);
+      toast.success(`Domain "${deleteTargetName}" deleted.`);
+      setDeleteTargetId(null);
+      setDeleteTargetName("");
+    } catch {
+      toast.error("Failed to delete domain. Please try again.");
     }
   };
   const handleImportOpenApi = async () => {
@@ -270,8 +335,13 @@ export default function ApisPage() {
           <Table>
             <TableHeader className="bg-[#0F1117] sticky top-0 z-10 border-b border-[#242938]">
               <TableRow className="hover:bg-transparent border-none">
-                <TableHead className="text-[#9AA3B2] font-medium h-12 w-[250px] pl-6">
-                  Domain
+                <TableHead
+                  className="text-[#9AA3B2] font-medium h-12 w-62.5 pl-6 cursor-pointer select-none hover:text-[#E6EAF2] transition-colors"
+                  onClick={() => handleSort("name")}
+                >
+                  <span className="inline-flex items-center">
+                    Domain <SortIcon column="name" />
+                  </span>
                 </TableHead>
                 <TableHead className="text-[#9AA3B2] font-medium h-12">
                   Base URL
@@ -279,17 +349,27 @@ export default function ApisPage() {
                 <TableHead className="text-[#9AA3B2] font-medium h-12">
                   Status
                 </TableHead>
-                <TableHead className="text-[#9AA3B2] font-medium h-12 text-center">
-                  Endpoints
+                <TableHead
+                  className="text-[#9AA3B2] font-medium h-12 text-center cursor-pointer select-none hover:text-[#E6EAF2] transition-colors"
+                  onClick={() => handleSort("endpointsCount")}
+                >
+                  <span className="inline-flex items-center">
+                    Endpoints <SortIcon column="endpointsCount" />
+                  </span>
                 </TableHead>
-                <TableHead className="text-[#9AA3B2] font-medium h-12 text-right">
-                  Created
+                <TableHead
+                  className="text-[#9AA3B2] font-medium h-12 text-right cursor-pointer select-none hover:text-[#E6EAF2] transition-colors"
+                  onClick={() => handleSort("created_at")}
+                >
+                  <span className="inline-flex items-center justify-end">
+                    Created <SortIcon column="created_at" />
+                  </span>
                 </TableHead>
-                <TableHead className="text-[#9AA3B2] font-medium h-12 w-[60px]"></TableHead>
+                <TableHead className="text-[#9AA3B2] font-medium h-12 w-15"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredDomains.map((domain) => (
+              {sortedDomains.map((domain) => (
                 <TableRow
                   key={domain.id}
                   className="border-[#242938] hover:bg-[#161A23] transition-colors cursor-pointer group"
@@ -298,7 +378,10 @@ export default function ApisPage() {
                   <TableCell className="font-semibold text-[#E6EAF2] pl-6 h-16">
                     {domain.name}
                   </TableCell>
-                  <TableCell className="text-[#9AA3B2] font-mono text-xs">
+                  <TableCell
+                    className="text-[#9AA3B2] font-mono text-xs max-w-75 truncate"
+                    title={domain.base_url}
+                  >
                     {domain.base_url}
                   </TableCell>
                   <TableCell>
@@ -370,7 +453,9 @@ export default function ApisPage() {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator className="bg-[#242938]" />
                           <DropdownMenuItem
-                            onClick={(e) => handleDeleteDomain(e, domain.id)}
+                            onClick={(e) =>
+                              handleDeleteDomain(e, domain.id, domain.name)
+                            }
                             className="focus:bg-[#242938] text-[#FF5C5C] focus:text-[#FF5C5C] cursor-pointer flex items-center gap-2"
                           >
                             <Trash2 className="w-4 h-4" /> Delete Domain
@@ -381,7 +466,7 @@ export default function ApisPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {filteredDomains.length === 0 && (
+              {sortedDomains.length === 0 && (
                 <TableRow>
                   <TableCell
                     colSpan={6}
@@ -396,7 +481,7 @@ export default function ApisPage() {
         </div>
       </div>
       <Dialog open={isDomainModalOpen} onOpenChange={setIsDomainModalOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-[#161A23] border-[#242938] text-[#E6EAF2]">
+        <DialogContent className="sm:max-w-106.25 bg-[#161A23] border-[#242938] text-[#E6EAF2]">
           <DialogHeader>
             <DialogTitle>
               {editingDomainId ? "Edit Domain" : "Add New Domain"}
@@ -450,7 +535,7 @@ export default function ApisPage() {
         </DialogContent>
       </Dialog>
       <Dialog open={isOpenApiModalOpen} onOpenChange={setIsOpenApiModalOpen}>
-        <DialogContent className="sm:max-w-[560px] bg-[#161A23] border-[#242938] text-[#E6EAF2]">
+        <DialogContent className="sm:max-w-140 bg-[#161A23] border-[#242938] text-[#E6EAF2]">
           <DialogHeader>
             <DialogTitle>Import OpenAPI Specification</DialogTitle>
             <DialogDescription className="text-[#9AA3B2]">
@@ -536,15 +621,51 @@ export default function ApisPage() {
               >
                 JSON File
               </Label>
-              <Input
-                id="openApiFile"
-                type="file"
-                accept="application/json"
-                onChange={(event) =>
-                  setOpenApiFile(event.target.files?.[0] || null)
-                }
-                className="col-span-3 bg-[#0F1117] border-[#242938] text-[#E6EAF2] file:text-[#E6EAF2]"
-              />
+              <div className="col-span-3">
+                <div
+                  className="relative border-2 border-dashed border-[#242938] rounded-lg p-4 text-center hover:border-[#5B5DFF]/50 transition-colors cursor-pointer"
+                  onClick={() =>
+                    document.getElementById("openApiFile")?.click()
+                  }
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setOpenApiFile(e.dataTransfer.files?.[0] || null);
+                  }}
+                >
+                  <Input
+                    id="openApiFile"
+                    type="file"
+                    accept="application/json"
+                    onChange={(event) =>
+                      setOpenApiFile(event.target.files?.[0] || null)
+                    }
+                    className="hidden"
+                  />
+                  {openApiFile ? (
+                    <div className="flex items-center justify-center gap-2 text-sm">
+                      <FileJson className="w-4 h-4 text-[#5B5DFF] shrink-0" />
+                      <span className="text-[#E6EAF2] font-mono text-xs truncate">
+                        {openApiFile.name}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenApiFile(null);
+                        }}
+                        className="text-[#FF5C5C] hover:text-red-400 ml-1 shrink-0"
+                        title="Remove file"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-[#9AA3B2] text-sm">
+                      Drop your JSON file here or click to browse
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -561,6 +682,38 @@ export default function ApisPage() {
               className="bg-[#5B5DFF] text-white hover:bg-[#5B5DFF]/90"
             >
               {uploadingOpenApi ? "Importing..." : "Import OpenAPI"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!deleteTargetId}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTargetId(null);
+        }}
+      >
+        <DialogContent className="bg-[#161A23] border-[#242938] text-[#E6EAF2]">
+          <DialogHeader>
+            <DialogTitle>Delete Domain</DialogTitle>
+            <DialogDescription className="text-[#9AA3B2]">
+              Are you sure you want to delete &ldquo;{deleteTargetName}&rdquo;?
+              This will also remove all associated endpoints and data. This
+              action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTargetId(null)}
+              className="border-[#242938] hover:bg-[#242938] text-[#E6EAF2]"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmDeleteDomain}
+              className="bg-[#FF5C5C] text-white hover:bg-[#FF5C5C]/90"
+            >
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
