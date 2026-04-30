@@ -302,19 +302,13 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if serviceKey != "" {
 			a.showConfirm = true
 			a.confirmMsg = fmt.Sprintf("Restart %s? (y/n)", a.serviceNames[serviceKey])
-			a.confirmCallback = func() {
-				a.manager.StopService(serviceKey)
-				time.Sleep(500 * time.Millisecond)
-				_ = a.manager.StartService(serviceKey)
-			}
+			a.confirmCallback = func() { _ = a.manager.RestartService(serviceKey) }
 		} else {
 			a.showConfirm = true
 			a.confirmMsg = "Restart all services? (y/n)"
 			a.confirmCallback = func() {
-				a.manager.StopAll()
-				time.Sleep(500 * time.Millisecond)
 				for _, key := range a.serviceKeys {
-					_ = a.manager.StartService(key)
+					_ = a.manager.RestartService(key)
 				}
 			}
 		}
@@ -638,10 +632,14 @@ func (a *App) renderSystemStats(height int) string {
 		}
 		shortName := ""
 		switch key {
-		case "controlplane": shortName = "CP"
-		case "ingest": shortName = "Ingest"
-		case "frontend": shortName = "Front"
-		case "api_testing": shortName = "API"
+		case "controlplane":
+			shortName = "CP"
+		case "ingest":
+			shortName = "Ingest"
+		case "frontend":
+			shortName = "Front"
+		case "api_testing":
+			shortName = "API"
 		}
 		statuses = append(statuses, hostURLStatus{label: shortName, alive: alive})
 	}
@@ -672,7 +670,7 @@ func (a *App) renderSystemStats(height int) string {
 	urlsStr := strings.Join(urlsParts, lipgloss.NewStyle().Foreground(colorMuted).Render(" • "))
 
 	titleStr := lipgloss.NewStyle().Bold(true).Foreground(colorPrimary).Render(" System Status ")
-	
+
 	headerWidth := a.width - 2
 	spaces := headerWidth - lipgloss.Width(titleStr) - lipgloss.Width(" "+urlsStr+" ")
 	if spaces < 1 {

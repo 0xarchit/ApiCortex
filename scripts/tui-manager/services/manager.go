@@ -140,7 +140,7 @@ func (m *Manager) StartService(name string) error {
 		}
 		// Additional safety delay to ensure OS has released the port
 		time.Sleep(500 * time.Millisecond)
-		
+
 		// Final verification
 		if !IsPortAvailable(port) {
 			instance.Status = StatusError
@@ -176,19 +176,19 @@ func (m *Manager) StopService(name string) error {
 	if instance.cmd != nil && instance.cmd.Process != nil {
 		pid := instance.cmd.Process.Pid
 		port := instance.Config.Port
-		
+
 		// First, try to kill any process on the port (in case it's a child process)
 		if port > 0 {
 			instance.sendLog("INFO", fmt.Sprintf("Releasing port %d...", port))
 			_ = KillProcessOnPort(port)
 			time.Sleep(300 * time.Millisecond)
 		}
-		
+
 		// Force kill the main process tree immediately
 		if err := killProcessTree(pid); err != nil {
 			instance.sendLog("WARN", fmt.Sprintf("Failed to kill process tree: %v", err))
 		}
-		
+
 		// Wait for exit channel with timeout
 		if instance.exitChan != nil {
 			select {
@@ -199,7 +199,7 @@ func (m *Manager) StopService(name string) error {
 				_ = killProcessTree(pid)
 			}
 		}
-		
+
 		// Additional wait for port release
 		if port > 0 {
 			instance.sendLog("INFO", fmt.Sprintf("Waiting for port %d to be released...", port))
@@ -212,7 +212,7 @@ func (m *Manager) StopService(name string) error {
 				instance.sendLog("INFO", fmt.Sprintf("Port %d is now available", port))
 			}
 		}
-		
+
 		instance.Status = StatusStopped
 		instance.Health = false
 	} else {
@@ -221,6 +221,25 @@ func (m *Manager) StopService(name string) error {
 	}
 
 	return nil
+}
+
+func (m *Manager) RestartService(name string) error {
+	if err := m.StopService(name); err != nil {
+		return err
+	}
+
+	svcConfig, ok := m.config.GetService(name)
+	if !ok {
+		return fmt.Errorf("service %s not found in config", name)
+	}
+
+	if svcConfig.Port > 0 {
+		if err := ForceReleasePort(svcConfig.Port, 10*time.Second); err != nil {
+			return fmt.Errorf("port %d is still busy after restart cleanup: %w", svcConfig.Port, err)
+		}
+	}
+
+	return m.StartService(name)
 }
 
 func (m *Manager) stopCloudflared(instance *ServiceInstance) {
