@@ -1,0 +1,109 @@
+name: "CodeQL Advanced"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '8 5 * * 0'
+
+jobs:
+  detect-changes:
+    name: Detect Changed Languages
+    runs-on: ubuntu-latest
+    outputs:
+      languages: ${{ steps.set-languages.outputs.languages }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Filter Paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            javascript:
+              - 'frontend/**'
+              - 'dbmanage/**'
+              - '**/*.js'
+              - '**/*.ts'
+              - '**/*.tsx'
+              - '**/*.jsx'
+            python:
+              - 'control-plane/**'
+              - 'ml-service/**'
+              - 'DataGen/**'
+              - 'scripts/**'
+              - '**/*.py'
+            go:
+              - 'ingest-service/**'
+              - 'scripts/tui-manager/**'
+              - '**/*.go'
+            rust:
+              - 'api-testing/**'
+              - '**/*.rs'
+            actions:
+              - '.github/workflows/**'
+              - '.github/actions/**'
+
+      - name: Set Language Matrix
+        id: set-languages
+        run: |
+          langs=()
+          
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ steps.filter.outputs.javascript }}" == "true" ]]; then
+            langs+=('"javascript"')
+          fi
+          
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ steps.filter.outputs.python }}" == "true" ]]; then
+            langs+=('"python"')
+          fi
+          
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ steps.filter.outputs.go }}" == "true" ]]; then
+            langs+=('"go"')
+          fi
+          
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ steps.filter.outputs.rust }}" == "true" ]]; then
+            langs+=('"rust"')
+          fi
+          
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ steps.filter.outputs.actions }}" == "true" ]]; then
+            langs+=('"actions"')
+          fi
+          
+          json_array="[$(IFS=,; echo "${langs[*]}")]"
+          echo "languages=$json_array" >> $GITHUB_OUTPUT
+
+  analyze:
+    name: Analyze
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.languages != '[]' }}
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(needs.detect-changes.outputs.languages) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"
