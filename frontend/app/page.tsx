@@ -8,6 +8,7 @@ import {
   useScroll,
   useInView,
   useMotionTemplate,
+  useReducedMotion,
 } from "framer-motion";
 import type { SVGProps } from "react";
 import Link from "next/link";
@@ -196,7 +197,11 @@ function TiltCard({
     [rotateX, rotateY, x, y, xPercent, yPercent],
   );
 
-const bgStyle = useMotionTemplate`radial-gradient(circle at ${xPercent}% ${yPercent}%, rgba(91,93,255,0.15) 0%, transparent 60%)`;
+const cursorOpacity = useTransform(
+    [x, y],
+    ([cx, cy]) => (Math.abs(cx as number) > 2 || Math.abs(cy as number) > 2 ? 1 : 0),
+  );
+  const bgStyle = useMotionTemplate`radial-gradient(circle at ${xPercent}% ${yPercent}%, rgba(91,93,255,0.15) 0%, transparent 60%)`;
   return (
     <motion.div
       ref={ref}
@@ -214,8 +219,8 @@ const bgStyle = useMotionTemplate`radial-gradient(circle at ${xPercent}% ${yPerc
       transition={{ type: "spring", stiffness: 200, damping: 20 }}
     >
       <motion.div
-        className="absolute inset-0 rounded-3xl pointer-events-none opacity-0 transition-opacity duration-300"
-        style={{ background: bgStyle }}
+        className="absolute inset-0 rounded-3xl pointer-events-none transition-opacity duration-300"
+        style={{ background: bgStyle, opacity: cursorOpacity }}
       />
       {children}
     </motion.div>
@@ -223,6 +228,7 @@ const bgStyle = useMotionTemplate`radial-gradient(circle at ${xPercent}% ${yPerc
 }
 
 export default function LandingPage() {
+  const reduceMotion = useReducedMotion() ?? false;
   const statsRef = useRef<HTMLDivElement>(null);
   const statsInView = useInView(statsRef, { once: true, margin: "-100px" });
   const featuresRef = useRef<HTMLDivElement>(null);
@@ -319,9 +325,9 @@ export default function LandingPage() {
         <section className="relative min-h-[calc(100vh-4rem)] flex items-center py-14 lg:py-20 px-6">
           <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.8, ease: "easeOut" }}
             >
               <div className="inline-flex flex-row items-center justify-center p-1 rounded-full bg-[#161A23] border border-[#242938] mb-8 pr-4">
                 <span className="px-3 py-1 text-xs font-semibold bg-[#5B5DFF] text-white rounded-full mr-3 shadow-[0_0_10px_rgba(91,93,255,0.5)]">
@@ -676,10 +682,10 @@ export default function LandingPage() {
               ].map((feature, i) => (
                 <TiltCard key={i}>
                   <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.5, delay: i * 0.1 }}
+                    initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+                    whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+                    viewport={reduceMotion ? undefined : { once: true }}
+                    transition={{ duration: reduceMotion ? 0 : 0.5, delay: reduceMotion ? 0 : i * 0.1 }}
                     className="group relative bg-[#161A23] border border-[#242938] rounded-3xl p-8 hover:border-[#5B5DFF]/50 transition-colors overflow-hidden flex flex-col h-87.5"
                   >
                     <div
@@ -740,10 +746,10 @@ export default function LandingPage() {
               ].map((item, i) => (
                 <motion.div
                   key={i}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: i * 0.15 }}
+                  initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+                  whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+                  viewport={reduceMotion ? undefined : { once: true }}
+                  transition={{ duration: reduceMotion ? 0 : 0.5, delay: reduceMotion ? 0 : i * 0.15 }}
                   className="relative z-10 flex flex-col items-center text-center w-full md:w-1/4 px-4 mb-12 md:mb-0"
                 >
                   <div className="w-24 h-24 rounded-full bg-[#0F1117] border-2 border-[#242938] flex flex-col items-center justify-center mb-6 shadow-xl relative overflow-hidden group">
@@ -800,10 +806,10 @@ export default function LandingPage() {
             </div>
             <div className="grid md:grid-cols-2 gap-8">
               <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6 }}
+                initial={reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
+                whileInView={reduceMotion ? undefined : { opacity: 1, x: 0 }}
+                viewport={reduceMotion ? undefined : { once: true }}
+                transition={{ duration: reduceMotion ? 0 : 0.6 }}
                 className="bg-[#161A23] border border-[#242938] rounded-2xl overflow-hidden"
               >
                 <div className="px-4 py-2 border-b border-[#242938] bg-[#FF5C5C]/10 flex items-center gap-2">
@@ -834,13 +840,12 @@ export default function LandingPage() {
                   </div>
                 </div>
               </motion.div>
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                className="bg-[#161A23] border border-[#00C2A8]/30 rounded-2xl overflow-hidden"
-              >
+<motion.div
+                  initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+                  whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+                  viewport={reduceMotion ? undefined : { once: true }}
+                  transition={{ duration: reduceMotion ? 0 : 0.5 }}
+                >
                 <div className="px-4 py-2 border-b border-[#00C2A8]/20 bg-[#00C2A8]/10 flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-[#00C2A8]" />
                   <span className="text-xs font-mono text-[#00C2A8] font-semibold">
@@ -881,10 +886,10 @@ export default function LandingPage() {
         >
           <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
             <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8 }}
+              initial={reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
+              whileInView={reduceMotion ? undefined : { opacity: 1, x: 0 }}
+              viewport={reduceMotion ? undefined : { once: true }}
+              transition={{ duration: reduceMotion ? 0 : 0.8 }}
               className="relative shadow-2xl rounded-2xl border border-[#242938] bg-[#0F1117] overflow-hidden"
             >
               <div className="h-10 border-b border-[#242938] bg-[#161A23] flex items-center px-4 gap-2">
@@ -964,10 +969,10 @@ export default function LandingPage() {
                 ].map((item, i) => (
                   <motion.li
                     key={i}
-                    initial={{ opacity: 0, x: 10 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.3, delay: i * 0.1 }}
+                    initial={reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: 10 }}
+                    whileInView={reduceMotion ? undefined : { opacity: 1, x: 0 }}
+                    viewport={reduceMotion ? undefined : { once: true }}
+                    transition={{ duration: reduceMotion ? 0 : 0.3, delay: reduceMotion ? 0 : i * 0.1 }}
                     className="flex items-center gap-3 text-white"
                   >
                     <div className="w-6 h-6 rounded-full bg-[#5B5DFF]/20 flex shrink-0 items-center justify-center">
@@ -1264,8 +1269,7 @@ function TerminalDemo() {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.6 }}
-      className="bg-[#0F1117] border border-[#242938] rounded-2xl overflow-hidden shadow-2xl cursor-text"
-      onClick={focusInput}
+      className="bg-[#161A23] border border-[#00C2A8]/30 rounded-2xl overflow-hidden"
     >
       <div className="h-10 border-b border-[#242938] bg-[#161A23] flex items-center px-4 gap-2">
         <div className="flex gap-1.5">
@@ -1295,7 +1299,7 @@ function TerminalDemo() {
         {step < commands.length && (
           <div className="flex items-center mt-1">
             <span className="text-[#5B5DFF]">$ </span>
-            <span className="text-[#9AA3B2]/50 text-xs mr-2">
+            <span id="terminal-cmd-hint" className="text-[#9AA3B2]/50 text-xs mr-2">
               (type: {commands[step].cmd})
             </span>
             <input
@@ -1303,6 +1307,8 @@ function TerminalDemo() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
+              aria-label="Terminal command input"
+              aria-describedby="terminal-cmd-hint"
               className="flex-1 bg-transparent border-none outline-none text-[#E6EAF2] font-mono text-sm"
               spellCheck={false}
             />
