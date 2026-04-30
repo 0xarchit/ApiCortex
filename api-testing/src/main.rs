@@ -48,6 +48,7 @@ fn create_reuseaddr_socket(addr: &str) -> Result<std::net::TcpListener, Box<dyn 
     
     socket.bind(&addr.into())?;
     socket.listen(1024)?;
+    socket.set_nonblocking(true)?;
     
     Ok(socket.into())
 }
