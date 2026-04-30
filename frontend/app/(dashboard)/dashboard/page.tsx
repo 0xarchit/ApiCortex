@@ -55,13 +55,18 @@ function DeltaBadge({
   positiveIsGood?: boolean;
 }) {
   const isPositive = value > 0;
+  const isZero = value === 0;
   const isGood = isPositive === positiveIsGood;
-  const color = isGood ? "text-[#00C2A8]" : "text-[#FF5C5C]";
+  const color = isZero
+    ? "text-[#9AA3B2]"
+    : isGood
+      ? "text-[#00C2A8]"
+      : "text-[#FF5C5C]";
   return (
     <span
       className={`inline-flex items-center gap-0.5 text-xs font-medium ${color}`}
     >
-      {isPositive ? (
+      {isZero ? null : isPositive ? (
         <TrendingUp className="w-3 h-3" />
       ) : (
         <TrendingDown className="w-3 h-3" />

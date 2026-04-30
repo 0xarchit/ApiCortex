@@ -32,7 +32,7 @@ export function Breadcrumb() {
   if (items.length <= 1) return null;
 
   return (
-    <nav className="flex items-center gap-1.5 text-xs mb-4 text-[#9AA3B2] overflow-x-auto">
+    <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs mb-4 text-[#9AA3B2] overflow-x-auto">
       <Link href="/dashboard" className="hover:text-[#E6EAF2] transition-colors shrink-0" title="Dashboard">
         <Home className="w-3.5 h-3.5" />
       </Link>
@@ -40,7 +40,12 @@ export function Breadcrumb() {
         <span key={item.href} className="flex items-center gap-1.5">
           <ChevronRight className="w-3 h-3 shrink-0" />
           {item.isLast ? (
-            <span className="text-[#E6EAF2] font-medium truncate">{item.label}</span>
+            <span
+              aria-current="page"
+              className="text-[#E6EAF2] font-medium truncate"
+            >
+              {item.label}
+            </span>
           ) : (
             <Link
               href={item.href}

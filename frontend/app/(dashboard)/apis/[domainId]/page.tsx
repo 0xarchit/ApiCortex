@@ -192,24 +192,25 @@ export default function DomainDetailsPage() {
     setIsEndpointModalOpen(true);
   };
   const handleSaveEndpoint = async () => {
-    if (!endpointFormPath.trim()) {
+    const normalizedPath = endpointFormPath.trim();
+    if (!normalizedPath) {
       toast.error("Endpoint path is required.");
       return;
     }
-    if (!endpointFormPath.startsWith("/")) {
+    if (!normalizedPath.startsWith("/")) {
       toast.error("Path must start with /");
       return;
     }
     try {
       if (editingEndpointId) {
         await apiClient.patch(`/endpoints/${editingEndpointId}`, {
-          path: endpointFormPath,
+          path: normalizedPath,
           method: endpointFormMethod,
         });
       } else {
         await apiClient.post("/endpoints", {
           api_id: domainId,
-          path: endpointFormPath,
+          path: normalizedPath,
           method: endpointFormMethod,
         });
       }
@@ -266,6 +267,7 @@ export default function DomainDetailsPage() {
             <p className="text-[#9AA3B2] mt-1 font-mono text-sm flex items-center gap-2">
               {domain?.base_url}
               <button
+                aria-label="Copy base URL"
                 onClick={(e) => { e.stopPropagation(); handleCopyBaseUrl(); }}
                 className="text-[#9AA3B2] hover:text-[#E6EAF2] transition-colors"
                 title="Copy base URL"

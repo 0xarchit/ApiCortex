@@ -249,7 +249,6 @@ export default function TestingPage() {
         if (parsed.headerRows) setHeaderRows(parsed.headerRows);
         if (parsed.body) setRequestBody(parsed.body);
         if (parsed.bodyMode) setBodyMode(parsed.bodyMode);
-        if (parsed.authToken) setAuthToken(parsed.authToken);
         if (parsed.requestHistory) setRequestHistory(parsed.requestHistory);
       } catch {}
     }
@@ -263,7 +262,6 @@ export default function TestingPage() {
       headerRows,
       body: requestBody,
       bodyMode,
-      authToken,
       requestHistory,
     };
     localStorage.setItem("apicortex_tester_state", JSON.stringify(state));
@@ -878,14 +876,7 @@ export default function TestingPage() {
                     variant="outline"
                     className={`font-mono font-bold ${response.status >= 200 && response.status < 300 ? "text-[#2ED573] border-[#2ED573]/30 bg-[#2ED573]/10" : response.status >= 400 ? "text-[#FF5C5C] border-[#FF5C5C]/30 bg-[#FF5C5C]/10" : "text-[#F5B74F] border-[#F5B74F]/30 bg-[#F5B74F]/10"}`}
                   >
-                    {response.status}{" "}
-                    {response.status === 200
-                      ? "OK"
-                      : response.status === 201
-                        ? "Created"
-                        : response.status === 204
-                          ? "No Content"
-                          : "Error"}
+                    {response.status} {getStatusLabel(response.status)}
                   </Badge>
                 </div>
                 <div className="w-px h-4 bg-[#242938] shrink-0" />

@@ -288,20 +288,22 @@ const predictionsQuery = useQuery({
         </div>
         <div className="flex items-center gap-3">
           <button
+            type="button"
+            aria-label="Refresh predictions"
             onClick={() => { predictionsQuery.refetch(); setNow(Date.now()); }}
             className="text-[#9AA3B2] hover:text-[#E6EAF2] transition-colors p-1.5 rounded-lg hover:bg-[#161A23]"
-            title="Refresh now"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
-          <Badge
-            variant="outline"
-            className={`cursor-pointer transition-all ${autoRefresh ? "bg-[#00C2A8]/10 text-[#00C2A8] border-[#00C2A8]/20" : "bg-[#242938] text-[#9AA3B2] border-[#242938]"}`}
+          <button
+            type="button"
+            aria-label={autoRefresh ? "Disable auto-refresh (30s)" : "Enable auto-refresh"}
             onClick={() => setAutoRefresh(!autoRefresh)}
+            className={`cursor-pointer transition-all rounded-full border text-xs font-medium px-2.5 py-1 ${autoRefresh ? "bg-[#00C2A8]/10 text-[#00C2A8] border-[#00C2A8]/20" : "bg-[#242938] text-[#9AA3B2] border-[#242938]"}`}
           >
-            <Clock className="w-3 h-3 mr-1" />
+            <Clock className="w-3 h-3 mr-1 inline-block" />
             {autoRefresh ? "Auto (30s)" : "Auto-off"}
-          </Badge>
+          </button>
           <Badge
             variant="outline"
             className="bg-[#5B5DFF]/10 text-[#5B5DFF] border-[#5B5DFF]/20 px-3 py-1"
