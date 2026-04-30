@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Cpu, Mail, Github, Twitter, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Cpu, Mail, Github, ArrowRight, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 
 type FormState = "idle" | "submitting" | "success" | "error";

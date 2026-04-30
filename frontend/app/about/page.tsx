@@ -9,10 +9,7 @@ import {
   GitBranch,
   Lock,
   Cpu,
-  Users,
   ArrowRight,
-  Mail,
-  Github,
 } from "lucide-react";
 
 const stats = [
@@ -68,11 +65,13 @@ const timeline = [
   },
   {
     year: "Early 2025",
-    event: "Closed beta with 5 engineering teams. First production anomaly caught before launch.",
+    event:
+      "Closed beta with 5 engineering teams. First production anomaly caught before launch.",
   },
   {
     year: "Mid 2025",
-    event: "Public launch. OpenAPI import, Slack alerts, and Grafana dashboard shipped.",
+    event:
+      "Public launch. OpenAPI import, Slack alerts, and Grafana dashboard shipped.",
   },
   {
     year: "2026",
@@ -101,8 +100,9 @@ export default function AboutPage() {
             for your API infrastructure.
           </h1>
           <p className="text-xl text-[#9AA3B2] max-w-2xl mx-auto leading-relaxed mb-10">
-            We predict API failures before they happen, validate contracts in real-time,
-            and give you deep telemetry — so your APIs stay reliable at any scale.
+            We predict API failures before they happen, validate contracts in
+            real-time, and give you deep telemetry — so your APIs stay reliable
+            at any scale.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/login">
@@ -128,7 +128,9 @@ export default function AboutPage() {
         <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
           {stats.map((s) => (
             <div key={s.label} className="text-center">
-              <div className="text-3xl font-black text-white mb-1">{s.value}</div>
+              <div className="text-3xl font-black text-white mb-1">
+                {s.value}
+              </div>
               <div className="text-sm text-[#9AA3B2]">{s.label}</div>
             </div>
           ))}
@@ -143,7 +145,8 @@ export default function AboutPage() {
               Everything your API needs
             </h2>
             <p className="text-[#9AA3B2] text-lg max-w-xl mx-auto">
-              From anomaly detection to contract validation — a complete observability stack for API-first teams.
+              From anomaly detection to contract validation — a complete
+              observability stack for API-first teams.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -183,7 +186,9 @@ export default function AboutPage() {
                   </div>
                   <div className="relative flex items-start gap-4">
                     <div className="shrink-0 w-3 h-3 rounded-full bg-[#5B5DFF] border-2 border-[#0F1117] mt-1.5 z-10" />
-                    <p className="text-[#9AA3B2] text-base leading-relaxed">{t.event}</p>
+                    <p className="text-[#9AA3B2] text-base leading-relaxed">
+                      {t.event}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -223,10 +228,16 @@ export default function AboutPage() {
             <Link href="/about" className="hover:text-white transition-colors">
               About
             </Link>
-            <Link href="/contact" className="hover:text-white transition-colors">
+            <Link
+              href="/contact"
+              className="hover:text-white transition-colors"
+            >
               Contact
             </Link>
-            <Link href="/privacy" className="hover:text-white transition-colors">
+            <Link
+              href="/privacy"
+              className="hover:text-white transition-colors"
+            >
               Privacy Policy
             </Link>
           </div>

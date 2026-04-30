@@ -1,5 +1,5 @@
 "use client";
-import { Cpu, ArrowRight } from "lucide-react";
+import { Cpu } from "lucide-react";
 import Link from "next/link";
 
 export default function PrivacyPage() {
@@ -12,9 +12,7 @@ export default function PrivacyPage() {
             <h1 className="text-4xl font-black tracking-tight mb-4">
               Privacy Policy
             </h1>
-            <p className="text-[#9AA3B2]">
-              Last updated: April 30, 2026
-            </p>
+            <p className="text-[#9AA3B2]">Last updated: April 30, 2026</p>
           </div>
 
           <div className="prose prose-invert max-w-none space-y-10">
@@ -24,11 +22,11 @@ export default function PrivacyPage() {
               <div className="text-[#9AA3B2] space-y-3">
                 <p>
                   ApiCortex, Inc. (&quot;ApiCortex,&quot; &quot;we,&quot; or
-                  &quot;us&quot;) operates the website located at
-                  apicortex.ai (the &quot;Site&quot;) and the ApiCortex platform
-                  (the &quot;Platform&quot;). This Privacy Policy explains how
-                  ApiCortex collects, uses, and protects information when you use
-                  our Site and Platform.
+                  &quot;us&quot;) operates the website located at apicortex.ai
+                  (the &quot;Site&quot;) and the ApiCortex platform (the
+                  &quot;Platform&quot;). This Privacy Policy explains how
+                  ApiCortex collects, uses, and protects information when you
+                  use our Site and Platform.
                 </p>
                 <p>
                   By using ApiCortex, you agree to the collection and use of
@@ -49,40 +47,32 @@ export default function PrivacyPage() {
                   </strong>{" "}
                   When you sign up via Google or GitHub OAuth, we collect your
                   email address, name, and profile picture. We do not store your
-                  OAuth tokens — authentication is handled entirely by the
-                  OAuth provider.
+                  OAuth tokens — authentication is handled entirely by the OAuth
+                  provider.
                 </p>
                 <p>
-                  <strong className="text-[#E6EAF2]">
-                    API Metadata.
-                  </strong>{" "}
-                  The Platform stores your OpenAPI specifications, endpoint
-                  configurations, and prediction settings. This data is encrypted
-                  at rest and in transit.
+                  <strong className="text-[#E6EAF2]">API Metadata.</strong> The
+                  Platform stores your OpenAPI specifications, endpoint
+                  configurations, and prediction settings. This data is
+                  encrypted at rest and in transit.
                 </p>
                 <p>
-                  <strong className="text-[#E6EAF2]">
-                    Telemetry Data.
-                  </strong>{" "}
-                  ApiCortex may collect anonymized, aggregated API
-                  telemetry (latency, error rates, traffic volume) solely for
-                  the purpose of providing the Platform&apos;s anomaly detection
-                  and monitoring features. This data is never shared with
-                  third parties.
+                  <strong className="text-[#E6EAF2]">Telemetry Data.</strong>{" "}
+                  ApiCortex may collect anonymized, aggregated API telemetry
+                  (latency, error rates, traffic volume) solely for the purpose
+                  of providing the Platform&apos;s anomaly detection and
+                  monitoring features. This data is never shared with third
+                  parties.
                 </p>
                 <p>
-                  <strong className="text-[#E6EAF2]">
-                    Usage Logs.
-                  </strong>{" "}
-                  We retain server-side request logs for up to 30 days for
+                  <strong className="text-[#E6EAF2]">Usage Logs.</strong> We
+                  retain server-side request logs for up to 30 days for
                   debugging and security purposes.
                 </p>
                 <p>
-                  <strong className="text-[#E6EAF2]">
-                    Cookies.
-                  </strong>{" "}
-                  We use essential session cookies to maintain your login.
-                  No advertising or tracking cookies are used.
+                  <strong className="text-[#E6EAF2]">Cookies.</strong> We use
+                  essential session cookies to maintain your login. No
+                  advertising or tracking cookies are used.
                 </p>
               </div>
             </section>
@@ -95,52 +85,43 @@ export default function PrivacyPage() {
               <div className="text-[#9AA3B2] space-y-3">
                 <ul className="space-y-2 list-disc pl-5">
                   <li>Provide and maintain the Platform</li>
-                  <li>
-                    Detect and alert on API anomalies in real-time
-                  </li>
+                  <li>Detect and alert on API anomalies in real-time</li>
                   <li>Send you service-related notifications</li>
-                  <li>
-                    Improve Platform performance and features
-                  </li>
-                  <li>
-                    Enforce rate limits and prevent abuse
-                  </li>
+                  <li>Improve Platform performance and features</li>
+                  <li>Enforce rate limits and prevent abuse</li>
                 </ul>
               </div>
             </section>
 
             {/* Sharing */}
             <section>
-              <h2 className="text-xl font-bold mb-4">
-                4. Information Sharing
-              </h2>
+              <h2 className="text-xl font-bold mb-4">4. Information Sharing</h2>
               <div className="text-[#9AA3B2] space-y-3">
                 <p>
-                  ApiCortex does not sell, trade, or rent your personal
-                  data. We share information only in these cases:
+                  ApiCortex does not sell, trade, or rent your personal data. We
+                  share information only in these cases:
                 </p>
                 <ul className="space-y-2 list-disc pl-5">
                   <li>
                     <strong className="text-[#E6EAF2]">
                       Service providers.
                     </strong>{" "}
-                    Trusted third-party services (hosting, analytics)
-                    that process data under our instructions.
+                    Trusted third-party services (hosting, analytics) that
+                    process data under our instructions.
                   </li>
                   <li>
                     <strong className="text-[#E6EAF2]">
                       Legal requirements.
                     </strong>{" "}
-                    When required by law, court order, or to prevent
-                    illegal activity.
+                    When required by law, court order, or to prevent illegal
+                    activity.
                   </li>
                   <li>
                     <strong className="text-[#E6EAF2]">
                       Business transfers.
                     </strong>{" "}
-                    In the event of a merger or acquisition,
-                    information may be transferred as part of the business
-                    assets.
+                    In the event of a merger or acquisition, information may be
+                    transferred as part of the business assets.
                   </li>
                 </ul>
               </div>
@@ -148,16 +129,14 @@ export default function PrivacyPage() {
 
             {/* Security */}
             <section>
-              <h2 className="text-xl font-bold mb-4">
-                5. Data Security
-              </h2>
+              <h2 className="text-xl font-bold mb-4">5. Data Security</h2>
               <div className="text-[#9AA3B2] space-y-3">
                 <p>
-                  We implement industry-standard measures to protect
-                  your data: TLS encryption in transit, AES-256 encryption
-                  at rest, role-based access controls, and regular security
-                  audits. No security measure is 100% foolproof, and we
-                  cannot guarantee absolute security of transmitted data.
+                  We implement industry-standard measures to protect your data:
+                  TLS encryption in transit, AES-256 encryption at rest,
+                  role-based access controls, and regular security audits. No
+                  security measure is 100% foolproof, and we cannot guarantee
+                  absolute security of transmitted data.
                 </p>
               </div>
             </section>
@@ -169,11 +148,11 @@ export default function PrivacyPage() {
               </h2>
               <div className="text-[#9AA3B2] space-y-3">
                 <p>
-                  Account data is retained until you delete your account.
-                  You can delete your account at any time from the Settings
-                  page, which permanently removes all personal data within 30
-                  days. API metadata is retained for 90 days after account
-                  deletion for audit purposes.
+                  Account data is retained until you delete your account. You
+                  can delete your account at any time from the Settings page,
+                  which permanently removes all personal data within 30 days.
+                  API metadata is retained for 90 days after account deletion
+                  for audit purposes.
                 </p>
                 <p>
                   To request data deletion, email{" "}
@@ -195,10 +174,10 @@ export default function PrivacyPage() {
               </h2>
               <div className="text-[#9AA3B2] space-y-3">
                 <p>
-                  The ApiCortex Platform is not intended for users under
-                  the age of 16. We do not knowingly collect data from
-                  minors. If you believe a minor&apos;s data has been
-                  collected, contact us immediately.
+                  The ApiCortex Platform is not intended for users under the age
+                  of 16. We do not knowingly collect data from minors. If you
+                  believe a minor&apos;s data has been collected, contact us
+                  immediately.
                 </p>
               </div>
             </section>
@@ -210,10 +189,10 @@ export default function PrivacyPage() {
               </h2>
               <div className="text-[#9AA3B2] space-y-3">
                 <p>
-                  We may update this Privacy Policy from time to time.
-                  Material changes will be communicated via email or a notice
-                  on the Platform. Continued use after changes constitutes
-                  acceptance of the updated policy.
+                  We may update this Privacy Policy from time to time. Material
+                  changes will be communicated via email or a notice on the
+                  Platform. Continued use after changes constitutes acceptance
+                  of the updated policy.
                 </p>
               </div>
             </section>
@@ -223,8 +202,7 @@ export default function PrivacyPage() {
               <h2 className="text-xl font-bold mb-4">9. Contact</h2>
               <div className="text-[#9AA3B2] space-y-3">
                 <p>
-                  For privacy-related questions or to submit a data
-                  request:
+                  For privacy-related questions or to submit a data request:
                 </p>
                 <p>
                   <strong className="text-[#E6EAF2]">Email:</strong>{" "}
@@ -254,7 +232,10 @@ export default function PrivacyPage() {
             <Link href="/about" className="hover:text-white transition-colors">
               About
             </Link>
-            <Link href="/contact" className="hover:text-white transition-colors">
+            <Link
+              href="/contact"
+              className="hover:text-white transition-colors"
+            >
               Contact
             </Link>
           </div>
