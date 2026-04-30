@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ import {
   TerminalSquare,
   ChevronDown,
   ChevronRight,
+  Clock,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import {
@@ -35,6 +36,12 @@ import {
 } from "@/lib/api-types";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type TestResponseState = {
   status: number;
@@ -95,8 +102,50 @@ const getStatusLabel = (status: number) => {
   return "Error";
 };
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function highlightJson(raw: string): string {
+  try {
+    JSON.parse(raw);
+  } catch {
+    return escapeHtml(raw);
+  }
+  return raw.replace(
+    /("(?:\\.|[^"\\])*")\s*:|("(?:\\.|[^"\\])*")|(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)\b|\b(true|false|null)\b/g,
+    (match, key, str, num, bool) => {
+      if (key) {
+        return `<span class="text-[#5B5DFF]">${escapeHtml(key)}</span>:`;
+      }
+      if (str) {
+        return `<span class="text-[#00C2A8]">${escapeHtml(str)}</span>`;
+      }
+      if (num) {
+        return `<span class="text-[#F5B74F]">${escapeHtml(num)}</span>`;
+      }
+      if (bool) {
+        return `<span class="text-[#3A8DFF]">${escapeHtml(bool)}</span>`;
+      }
+      return escapeHtml(match);
+    },
+  );
+}
+
 export default function TestingPage() {
-  const searchParams = useSearchParams();
+  const headerIdCounter = useRef(1);
+  const createHeaderRow = (): HeaderRow => ({
+    id: `header-${headerIdCounter.current++}`,
+    enabled: true,
+    key: "",
+    value: "",
+  });
+
   const [protocol, setProtocol] = useState<"http" | "graphql" | "websocket">(
     "http",
   );
@@ -114,8 +163,105 @@ export default function TestingPage() {
     "none",
   );
   const [headerRows, setHeaderRows] = useState<HeaderRow[]>([
-    { id: crypto.randomUUID(), enabled: true, key: "", value: "" },
+    { id: "header-0", enabled: true, key: "", value: "" },
   ]);
+  const [requestHistory, setRequestHistory] = useState<
+    {
+      url: string;
+      method: string;
+      protocol: string;
+      body: string;
+      bodyMode: string;
+      timestamp: number;
+    }[]
+  >([]);
+  const [authToken, setAuthToken] = useState("");
+  const testerStateKey = "apicortex_tester_state";
+
+  const sanitizeHeaderRows = (rows: unknown): HeaderRow[] => {
+    if (!Array.isArray(rows)) {
+      return [];
+    }
+
+    return rows.filter((row): row is HeaderRow => {
+      if (!row || typeof row !== "object") {
+        return false;
+      }
+
+      const candidate = row as HeaderRow;
+      if (
+        typeof candidate.id !== "string" ||
+        typeof candidate.enabled !== "boolean" ||
+        typeof candidate.key !== "string" ||
+        typeof candidate.value !== "string"
+      ) {
+        return false;
+      }
+
+      const headerName = candidate.key.trim().toLowerCase();
+      if (
+        headerName === "authorization" ||
+        headerName === "cookie" ||
+        headerName === "set-cookie" ||
+        headerName === "proxy-authorization" ||
+        headerName.includes("token") ||
+        headerName.includes("key") ||
+        headerName.includes("secret")
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+  };
+
+  const getStoredTesterState = () => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    const sessionValue = sessionStorage.getItem(testerStateKey);
+    if (sessionValue) {
+      return sessionValue;
+    }
+
+    const legacyValue = localStorage.getItem(testerStateKey);
+    if (legacyValue) {
+      localStorage.removeItem(testerStateKey);
+    }
+    return legacyValue;
+  };
+
+  const getQueryParams = () => {
+    if (typeof window === "undefined")
+      return { url: null, method: null, protocol: null };
+    const params = new URLSearchParams(window.location.search);
+    return {
+      url: params.get("url"),
+      method: params.get("method"),
+      protocol: params.get("protocol"),
+    };
+  };
+
+  useEffect(() => {
+    const qpUrl = getQueryParams().url;
+    const qpMethod = getQueryParams().method;
+    const qpProtocol = getQueryParams().protocol;
+
+    if (qpUrl) {
+      setUrl(qpUrl);
+    }
+    if (qpMethod) {
+      setMethod(qpMethod.toUpperCase());
+    }
+    if (
+      qpProtocol === "http" ||
+      qpProtocol === "graphql" ||
+      qpProtocol === "websocket"
+    ) {
+      setProtocol(qpProtocol);
+    }
+  }, []);
 
   const domainsQuery = useQuery({
     queryKey: ["testing-domains"],
@@ -191,30 +337,44 @@ export default function TestingPage() {
   };
 
   useEffect(() => {
-    const qpUrl = searchParams.get("url");
-    const qpMethod = searchParams.get("method");
-    const qpProtocol = searchParams.get("protocol");
+    const saved = getStoredTesterState();
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.url) setUrl(parsed.url);
+        if (parsed.method) setMethod(parsed.method);
+        if (parsed.protocol) setProtocol(parsed.protocol);
+        if (parsed.bodyMode) setBodyMode(parsed.bodyMode);
+        const restoredRows = sanitizeHeaderRows(parsed.headerRows);
+        if (restoredRows.length > 0) {
+          setHeaderRows(restoredRows);
+          const maxHeaderId = restoredRows.reduce((max, row) => {
+            const match = /^header-(\d+)$/.exec(row.id);
+            if (!match) {
+              return max;
+            }
+            return Math.max(max, Number.parseInt(match[1], 10));
+          }, 0);
+          headerIdCounter.current = maxHeaderId + 1;
+        }
+      } catch {}
+    }
+  }, []);
 
-    if (qpUrl) {
-      setUrl(qpUrl);
-    }
-    if (qpMethod) {
-      setMethod(qpMethod.toUpperCase());
-    }
-    if (
-      qpProtocol === "http" ||
-      qpProtocol === "graphql" ||
-      qpProtocol === "websocket"
-    ) {
-      setProtocol(qpProtocol);
-    }
-  }, [searchParams]);
+  const handleSaveState = () => {
+    const state = {
+      url,
+      method,
+      protocol,
+      bodyMode,
+    };
+    sessionStorage.setItem(testerStateKey, JSON.stringify(state));
+    localStorage.removeItem(testerStateKey);
+    toast.success("State saved to browser storage.");
+  };
 
   const addHeaderRow = () => {
-    setHeaderRows((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), enabled: true, key: "", value: "" },
-    ]);
+    setHeaderRows((prev) => [...prev, createHeaderRow()]);
   };
 
   const removeHeaderRow = (id: string) => {
@@ -223,7 +383,7 @@ export default function TestingPage() {
       if (next.length > 0) {
         return next;
       }
-      return [{ id: crypto.randomUUID(), enabled: true, key: "", value: "" }];
+      return [createHeaderRow()];
     });
   };
 
@@ -278,9 +438,38 @@ export default function TestingPage() {
     [headerRows],
   );
 
+  const parsedQueryParams = useMemo(() => {
+    try {
+      const urlObj = new URL(
+        url.includes("://")
+          ? url
+          : `http://placeholder${url.startsWith("/") ? url : `/${url}`}`,
+      );
+      const params: { key: string; value: string }[] = [];
+      urlObj.searchParams.forEach((value, key) => {
+        params.push({ key, value });
+      });
+      return params;
+    } catch {
+      return [];
+    }
+  }, [url]);
+
   const handleSend = async () => {
     setIsSending(true);
     setResponse(null);
+    const historyEntry = {
+      url,
+      method,
+      protocol,
+      body: requestBody,
+      bodyMode,
+      timestamp: Date.now(),
+    };
+    setRequestHistory((prev) => {
+      const filtered = prev.filter((h) => h.url !== url || h.method !== method);
+      return [historyEntry, ...filtered].slice(0, 8);
+    });
     try {
       let parsedBody: unknown = null;
       if (
@@ -291,12 +480,16 @@ export default function TestingPage() {
         parsedBody = requestBody;
       }
 
+      const headersWithAuth = authToken
+        ? { ...headersWithBodyMode, Authorization: `Bearer ${authToken}` }
+        : headersWithBodyMode;
+
       const payload: ExecuteRequest = {
         test_id: `web-${Date.now()}`,
         protocol,
         url,
         method: protocol === "websocket" ? undefined : method,
-        headers: headersWithBodyMode,
+        headers: headersWithAuth,
         body: parsedBody,
         follow_redirects: true,
         timeout_ms: 30000,
@@ -401,8 +594,8 @@ export default function TestingPage() {
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col">
-      <div className="flex-1 w-full flex flex-col 2xl:flex-row rounded-2xl border border-[#242938] overflow-hidden shadow-2xl">
-        <div className="w-full 2xl:w-70 shrink-0 border-b 2xl:border-b-0 2xl:border-r border-[#242938] bg-[#0F1117] max-h-64 2xl:max-h-none">
+      <div className="flex-1 w-full flex flex-col xl:flex-row rounded-2xl border border-[#242938] overflow-hidden shadow-2xl">
+        <div className="w-full xl:w-70 shrink-0 border-b xl:border-b-0 xl:border-r border-[#242938] bg-[#0F1117] max-h-64 xl:max-h-none">
           <div className="p-4 h-full flex flex-col min-w-0">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-[#E6EAF2] uppercase tracking-wider truncate">
@@ -461,7 +654,7 @@ export default function TestingPage() {
             </div>
           </div>
         </div>
-        <div className="flex-1 flex flex-col bg-[#161A23] min-w-0 min-h-[50vh] 2xl:min-h-0">
+        <div className="flex-1 flex flex-col bg-[#161A23] min-w-0 min-h-[50vh] xl:min-h-0">
           <div className="p-4 border-b border-[#242938] flex gap-2 items-center bg-[#0F1117]/50 overflow-x-auto hidden-scrollbar">
             <Select
               value={protocol}
@@ -541,10 +734,47 @@ export default function TestingPage() {
             <Button
               variant="outline"
               size="icon"
+              onClick={handleSaveState}
+              title="Save current state to browser storage"
               className="shrink-0 border-[#242938] text-[#9AA3B2] hover:text-[#E6EAF2] hover:bg-[#242938]"
             >
               <Save className="w-4 h-4" />
             </Button>
+            {requestHistory.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  aria-label="Open request history"
+                  title="Open request history"
+                  className="shrink-0 border border-[#242938] text-[#9AA3B2] hover:text-[#E6EAF2] hover:bg-[#242938] rounded-md px-2 py-1.5 inline-flex items-center justify-center"
+                >
+                  <Clock className="w-4 h-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="bg-[#161A23] border-[#242938] text-[#E6EAF2] max-h-64 overflow-y-auto">
+                  {requestHistory.map((h, i) => (
+                    <DropdownMenuItem
+                      key={i}
+                      onClick={() => {
+                        setUrl(h.url);
+                        setMethod(h.method);
+                        setProtocol(
+                          h.protocol as "http" | "graphql" | "websocket",
+                        );
+                        setRequestBody(h.body);
+                        setBodyMode(
+                          h.bodyMode as "none" | "json" | "text" | "xml",
+                        );
+                      }}
+                      className="focus:bg-[#242938] focus:text-[#E6EAF2] cursor-pointer text-xs font-mono"
+                    >
+                      <span className={getMethodColor(h.method)}>
+                        {h.method}
+                      </span>
+                      <span className="ml-2 truncate">{h.url}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
           <div className="flex-1 p-0 overflow-hidden flex flex-col min-w-0">
             <Tabs defaultValue="headers" className="h-full flex flex-col">
@@ -681,51 +911,94 @@ export default function TestingPage() {
               </TabsContent>
               <TabsContent
                 value="params"
-                className="flex-1 p-4 m-0 text-sm text-[#9AA3B2]"
+                className="flex-1 p-4 m-0 text-sm text-[#9AA3B2] overflow-auto"
               >
-                No parameters configured.
+                {parsedQueryParams.length > 0 ? (
+                  <div className="space-y-1 font-mono text-xs">
+                    {parsedQueryParams.map((p, i) => (
+                      <div key={i} className="flex gap-2 items-center py-1">
+                        <span className="text-[#5B5DFF] font-semibold">
+                          {p.key}
+                        </span>
+                        <span className="text-[#9AA3B2]">=</span>
+                        <span className="text-[#00C2A8]">{p.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-sm italic">
+                    No query parameters in URL. Add ?key=value to the URL bar
+                    above.
+                  </span>
+                )}
               </TabsContent>
               <TabsContent
                 value="auth"
-                className="flex-1 p-4 m-0 text-sm text-[#9AA3B2]"
+                className="flex-1 p-4 m-0 text-sm text-[#9AA3B2] overflow-auto"
               >
-                Using global Bearer token from settings.
+                <div className="space-y-3">
+                  <p className="text-[#E6EAF2] text-xs uppercase tracking-wider font-semibold">
+                    Bearer Token
+                  </p>
+                  <Input
+                    value={authToken}
+                    onChange={(e) => setAuthToken(e.target.value)}
+                    placeholder="Paste your Bearer token here..."
+                    type="password"
+                    className="bg-[#0F1117] border-[#242938] text-[#E6EAF2] focus-visible:ring-[#5B5DFF] font-mono text-sm"
+                  />
+                  {authToken && (
+                    <p className="text-xs text-[#9AA3B2]">
+                      Token set ({authToken.length} chars). Added as{" "}
+                      <code className="text-[#5B5DFF]">
+                        Authorization: Bearer ...
+                      </code>{" "}
+                      header.
+                    </p>
+                  )}
+                  <Link
+                    href="/settings"
+                    className="text-xs text-[#3A8DFF] hover:text-[#5B5DFF] transition-colors inline-flex items-center gap-1"
+                  >
+                    Edit in Settings
+                  </Link>
+                </div>
               </TabsContent>
             </Tabs>
           </div>
         </div>
-        <div className="w-full 2xl:w-[35%] 2xl:min-w-75 shrink-0 bg-[#0F1117] border-t 2xl:border-t-0 2xl:border-l border-[#242938] flex flex-col relative min-h-[40vh] 2xl:min-h-0 min-w-0 overflow-hidden">
+        <div className="w-full xl:w-[35%] xl:min-w-75 shrink-0 bg-[#0F1117] border-t xl:border-t-0 xl:border-l border-[#242938] flex flex-col relative min-h-[40vh] xl:min-h-0 min-w-0 overflow-hidden">
           {response ? (
             <>
               <div className="p-3 border-b border-[#242938] flex items-center gap-4 bg-[#161A23]/50 overflow-x-auto hidden-scrollbar">
                 <div className="flex items-center gap-2 text-sm font-medium shrink-0">
                   <span className="text-[#9AA3B2]">Status</span>
-                  <span
-                    className={`font-bold flex items-center gap-1 ${response.status >= 200 && response.status < 300 ? "text-[#2ED573]" : response.status >= 400 ? "text-[#FF5C5C]" : "text-[#F5B74F]"}`}
+                  <Badge
+                    variant="outline"
+                    className={`font-mono font-bold ${response.status >= 200 && response.status < 300 ? "text-[#2ED573] border-[#2ED573]/30 bg-[#2ED573]/10" : response.status >= 400 ? "text-[#FF5C5C] border-[#FF5C5C]/30 bg-[#FF5C5C]/10" : "text-[#F5B74F] border-[#F5B74F]/30 bg-[#F5B74F]/10"}`}
                   >
-                    {response.status}{" "}
-                    {response.status === 200
-                      ? "OK"
-                      : response.status === 201
-                        ? "Created"
-                        : response.status === 204
-                          ? "No Content"
-                          : "Error"}
-                  </span>
+                    {response.status} {getStatusLabel(response.status)}
+                  </Badge>
                 </div>
                 <div className="w-px h-4 bg-[#242938] shrink-0" />
                 <div className="flex items-center gap-2 text-sm font-medium shrink-0">
                   <span className="text-[#9AA3B2]">Time</span>
-                  <span className="text-[#00C2A8] font-mono bg-[#00C2A8]/10 px-1.5 py-0.5 rounded">
+                  <Badge
+                    variant="outline"
+                    className="font-mono text-[#00C2A8] border-[#00C2A8]/20 bg-[#00C2A8]/10"
+                  >
                     {response.time}
-                  </span>
+                  </Badge>
                 </div>
                 <div className="w-px h-4 bg-[#242938] shrink-0" />
                 <div className="flex items-center gap-2 text-sm font-medium shrink-0">
                   <span className="text-[#9AA3B2]">Size</span>
-                  <span className="text-[#E6EAF2] font-mono">
+                  <Badge
+                    variant="outline"
+                    className="font-mono text-[#E6EAF2] border-[#242938] bg-[#242938]/30"
+                  >
                     {response.size}
-                  </span>
+                  </Badge>
                 </div>
               </div>
               <div className="bg-[#161A23] border-b border-[#242938] px-4 py-2 flex items-center justify-between gap-3 min-w-0">
@@ -788,8 +1061,12 @@ export default function TestingPage() {
                     </Button>
                   </div>
                   {response.body ? (
-                    <pre className="p-4 font-mono text-sm leading-relaxed overflow-auto h-full text-[#E6EAF2] whitespace-pre-wrap wrap-break-word min-w-0">
-                      <code>{response.body}</code>
+                    <pre className="p-4 font-mono text-sm leading-relaxed overflow-auto h-full whitespace-pre-wrap wrap-break-word min-w-0">
+                      <code
+                        dangerouslySetInnerHTML={{
+                          __html: highlightJson(response.body),
+                        }}
+                      />
                     </pre>
                   ) : (
                     <div className="p-4 text-sm text-[#9AA3B2] font-mono italic">

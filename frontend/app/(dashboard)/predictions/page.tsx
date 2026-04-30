@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import {
   FlaskConical,
   AlertTriangle,
@@ -8,6 +9,8 @@ import {
   Cpu,
   Filter,
   Layers,
+  RefreshCw,
+  Clock,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
+import { EmptyState } from "@/components/layout/EmptyState";
 
 interface PredictionFeature {
   name: string;
@@ -61,8 +65,9 @@ type RiskFilter = "all" | "critical" | "warning" | "stable";
 
 export default function PredictionsPage() {
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
-  const [now] = useState(() => Date.now());
-  const predictionsQuery = useQuery({
+  const [now, setNow] = useState(() => Date.now());
+  const [autoRefresh, setAutoRefresh] = useState(false);
+const predictionsQuery = useQuery({
     queryKey: ["predictions"],
     queryFn: async () => {
       const response =
@@ -71,6 +76,16 @@ export default function PredictionsPage() {
     },
     staleTime: 2 * 60 * 1000,
   });
+  const { refetch: predictionsRefetch } = predictionsQuery;
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      predictionsRefetch();
+      setNow(Date.now());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, predictionsRefetch]);
 
   const data = useMemo(
     () => predictionsQuery.data ?? [],
@@ -264,15 +279,39 @@ export default function PredictionsPage() {
           <p className="text-[#9AA3B2] text-sm">
             Advanced machine learning engine predicting API downtime before it
             happens.
+            {predictionsQuery.dataUpdatedAt && (
+              <span className="ml-2 text-xs text-[#9AA3B2]/70">
+                Last updated: {new Date(predictionsQuery.dataUpdatedAt).toLocaleTimeString()}
+              </span>
+            )}
           </p>
         </div>
-        <Badge
-          variant="outline"
-          className="bg-[#5B5DFF]/10 text-[#5B5DFF] border-[#5B5DFF]/20 px-3 py-1"
-        >
-          <Cpu className="w-4 h-4 mr-2" />
-          Models Active
-        </Badge>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            aria-label="Refresh predictions"
+            onClick={() => { predictionsQuery.refetch(); setNow(Date.now()); }}
+            className="text-[#9AA3B2] hover:text-[#E6EAF2] transition-colors p-1.5 rounded-lg hover:bg-[#161A23]"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            aria-label={autoRefresh ? "Disable auto-refresh (30s)" : "Enable auto-refresh"}
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className={`cursor-pointer transition-all rounded-full border text-xs font-medium px-2.5 py-1 ${autoRefresh ? "bg-[#00C2A8]/10 text-[#00C2A8] border-[#00C2A8]/20" : "bg-[#242938] text-[#9AA3B2] border-[#242938]"}`}
+          >
+            <Clock className="w-3 h-3 mr-1 inline-block" />
+            {autoRefresh ? "Auto (30s)" : "Auto-off"}
+          </button>
+          <Badge
+            variant="outline"
+            className="bg-[#5B5DFF]/10 text-[#5B5DFF] border-[#5B5DFF]/20 px-3 py-1"
+          >
+            <Cpu className="w-4 h-4 mr-2" />
+            Models Active
+          </Badge>
+        </div>
       </div>
 
       {data.length > 0 && (
@@ -342,31 +381,22 @@ export default function PredictionsPage() {
 
       {data.length === 0 ? (
         <Card className="bg-[#161A23]/50 backdrop-blur-sm border-[#242938]">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <ShieldAlert className="w-12 h-12 text-[#00C2A8] mb-4 opacity-70" />
-            <h3 className="text-lg font-medium text-[#E6EAF2]">
-              No imminent failures detected
-            </h3>
-            <p className="text-[#9AA3B2] mt-2 max-w-md text-center">
-              Your APIs look healthy! Our ML models are constantly monitoring
-              traffic patterns for anomalies.
-            </p>
-            <p className="text-[#9AA3B2] mt-2 max-w-lg text-center text-sm">
-              If traffic is mostly HTTP 404, inference is intentionally skipped
-              and those events are handled by tracking auto-pause policy.
-            </p>
+          <CardContent>
+            <EmptyState
+              icon={ShieldAlert}
+              title="No imminent failures detected"
+              description="Your APIs look healthy! Our ML models are constantly monitoring traffic patterns for anomalies. If traffic is mostly HTTP 404, inference is intentionally skipped."
+            />
           </CardContent>
         </Card>
       ) : filteredGroups.length === 0 ? (
         <Card className="bg-[#161A23]/50 backdrop-blur-sm border-[#242938]">
-          <CardContent className="flex flex-col items-center justify-center py-14 text-center">
-            <Layers className="w-10 h-10 text-[#9AA3B2] mb-3" />
-            <h3 className="text-lg font-medium text-[#E6EAF2]">
-              No endpoint groups in this filter
-            </h3>
-            <p className="text-[#9AA3B2] mt-2 max-w-lg">
-              Adjust the risk filter to inspect another risk band.
-            </p>
+          <CardContent>
+            <EmptyState
+              icon={Layers}
+              title="No endpoint groups in this filter"
+              description="Adjust the risk filter to inspect another risk band."
+            />
           </CardContent>
         </Card>
       ) : (
@@ -471,11 +501,11 @@ export default function PredictionsPage() {
                               </span>
                             </div>
                             <div className="w-full h-1.5 bg-[#1E232E] rounded-full overflow-hidden">
-                              <div
+                              <motion.div
                                 className="h-full bg-linear-to-r from-[#5B5DFF] to-[#3A8DFF] rounded-full"
-                                style={{
-                                  width: `${Math.min(100, Math.max(0, feature.contribution * 100))}%`,
-                                }}
+                                initial={{ width: 0 }}
+                                animate={{ width: `${Math.min(100, Math.max(0, feature.contribution * 100))}%` }}
+                                transition={{ duration: 1, delay: index * 0.15, ease: "easeOut" }}
                               />
                             </div>
                           </div>

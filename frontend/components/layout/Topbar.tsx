@@ -9,8 +9,14 @@ import {
   CircleCheck,
   TriangleAlert,
   Info,
+  Menu,
+  LayoutDashboard,
+  TerminalSquare,
+  Network,
+  BarChart3,
+  FlaskConical,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,8 +27,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
+import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api-client";
 import type {
   AuthSession,
@@ -31,12 +40,26 @@ import type {
   User as AppUser,
 } from "@/lib/api-types";
 
+const mobileNavItems = [
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "API Testing", href: "/testing", icon: TerminalSquare },
+  { name: "APIs", href: "/apis", icon: Network },
+  { name: "Telemetry", href: "/telemetry", icon: BarChart3 },
+  { name: "Predictions", href: "/predictions", icon: FlaskConical },
+  { name: "Profile", href: "/profile", icon: User },
+  { name: "Settings", href: "/settings", icon: Settings },
+];
+
 /**
  * Dashboard topbar that resolves session identity, displays tenant context,
  * and provides profile/settings/logout actions.
  */
 export function Topbar() {
   const router = useRouter();
+  const pathname = usePathname();
+  const { setTheme, resolvedTheme } = useTheme();
+  const [searchText, setSearchText] = useState("");
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const [profile, setProfile] = useState<AppUser | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -45,6 +68,8 @@ export function Topbar() {
     [],
   );
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const lastUnreadCountRef = useRef(0);
+  const [badgeKey, setBadgeKey] = useState(0);
 
   const loadNotifications = async () => {
     setNotificationsLoading(true);
@@ -99,6 +124,13 @@ export function Topbar() {
     () => notifications.filter((item) => !item.is_read).length,
     [notifications],
   );
+
+  useEffect(() => {
+    if (unreadCount > lastUnreadCountRef.current) {
+      setBadgeKey((prev) => prev + 1);
+    }
+    lastUnreadCountRef.current = unreadCount;
+  }, [unreadCount]);
 
   const markNotificationAsRead = async (id: string) => {
     const target = notifications.find((item) => item.id === id);
@@ -201,19 +233,141 @@ export function Topbar() {
     }
   };
 
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && searchText.trim()) {
+      const query = searchText.trim().toLowerCase();
+      if (query.includes("api") || query.includes("domain")) {
+        router.push("/apis");
+      } else if (query.includes("test")) {
+        router.push("/testing");
+      } else if (query.includes("pred")) {
+        router.push("/predictions");
+      } else if (query.includes("tele") || query.includes("metric")) {
+        router.push("/telemetry");
+      } else if (query.includes("set")) {
+        router.push("/settings");
+      } else if (query.includes("profil")) {
+        router.push("/profile");
+      } else {
+        router.push("/dashboard");
+      }
+    }
+  };
+
   return (
-    <div className="h-16 border-b border-[#242938] bg-[#0F1117]/80 backdrop-blur-xl sticky top-0 z-40 flex items-center justify-between px-6">
-      <div className="flex items-center gap-4 flex-1">
-        <div className="relative w-full max-w-md">
+    <div className="h-16 border-b border-[#242938] bg-[#0F1117]/80 backdrop-blur-xl sticky top-0 z-40 flex items-center justify-between px-4 md:px-6">
+      <div className="flex items-center gap-3 flex-1">
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetTrigger>
+            <button
+              className="md:hidden text-[#9AA3B2] hover:text-[#E6EAF2] transition-colors p-1.5 rounded-lg hover:bg-[#161A23]"
+              title="Open navigation menu"
+              type="button"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          </SheetTrigger>
+          <SheetContent
+            side="left"
+            className="w-64 bg-[#0F1117] border-[#242938] p-0"
+          >
+            <div className="h-16 flex items-center gap-3 px-4 border-b border-[#242938]">
+              <div className="w-8 h-8 rounded-lg shrink-0 bg-linear-to-tr from-[#5B5DFF] to-[#00C2A8] flex items-center justify-center shadow-[0_0_15px_rgba(91,93,255,0.4)]">
+                <Network className="text-white w-5 h-5" />
+              </div>
+              <span className="font-bold text-xl text-[#E6EAF2] tracking-tight">
+                ApiCortex
+              </span>
+            </div>
+            <div className="py-4 px-3 space-y-1">
+              {mobileNavItems.map((item) => {
+                const isActive = pathname?.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileOpen(false)}
+                    prefetch
+                    className={cn(
+                      "flex items-center gap-3 py-2.5 px-3 rounded-xl transition-all duration-200 text-sm font-medium relative",
+                      isActive
+                        ? "bg-[#161A23] text-[#E6EAF2]"
+                        : "text-[#9AA3B2] hover:bg-[#161A23] hover:text-[#E6EAF2]",
+                    )}
+                  >
+                    {isActive && (
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.75 h-6 bg-[#3A8DFF] rounded-r-full shadow-[0_0_10px_2px_rgba(58,141,255,0.4)]" />
+                    )}
+                    <item.icon
+                      className={cn(
+                        "w-5 h-5 shrink-0",
+                        isActive ? "text-[#3A8DFF]" : "text-[#9AA3B2]",
+                      )}
+                    />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </SheetContent>
+        </Sheet>
+        <div className="relative w-full max-w-md hidden sm:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9AA3B2]" />
           <Input
             type="text"
             placeholder="Search APIs, endpoints, tests..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onKeyDown={handleSearch}
             className="pl-9 bg-[#161A23] border-[#242938] text-[#E6EAF2] placeholder:text-[#9AA3B2] focus-visible:ring-[#5B5DFF] h-9 rounded-lg"
           />
         </div>
       </div>
-      <div className="flex items-center gap-5">
+      <div className="flex items-center gap-3 md:gap-5">
+        <button
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+          className="text-[#9AA3B2] hover:text-[#E6EAF2] transition-colors p-1.5 rounded-lg hover:bg-[#161A23]"
+          title={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
+          type="button"
+        >
+          {resolvedTheme === "dark" ? (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2" />
+              <path d="M12 20v2" />
+              <path d="m4.93 4.93 1.41 1.41" />
+              <path d="m17.66 17.66 1.41 1.41" />
+              <path d="M2 12h2" />
+              <path d="M20 12h2" />
+              <path d="m6.34 17.66-1.41 1.41" />
+              <path d="m19.07 4.93-1.41 1.41" />
+            </svg>
+          ) : (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+            </svg>
+          )}
+        </button>
         <div className="flex items-center gap-2 cursor-pointer hover:bg-[#161A23] px-3 py-1.5 rounded-lg transition-colors border border-transparent hover:border-[#242938]">
           <div className="w-5 h-5 rounded bg-linear-to-tr from-[#5B5DFF] to-[#3A8DFF] flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
             {orgInitials}
@@ -228,7 +382,10 @@ export function Topbar() {
             <DropdownMenuTrigger className="relative text-[#9AA3B2] hover:text-[#E6EAF2] transition-colors rounded-full p-1 hover:bg-[#161A23] outline-none">
               <Bell className="w-5 h-5" />
               {unreadCount > 0 ? (
-                <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-[#FF5C5C] text-[10px] leading-4 text-white border border-[#0F1117]">
+                <span
+                  key={badgeKey}
+                  className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-[#FF5C5C] text-[10px] leading-4 text-white border border-[#0F1117] badge-pop"
+                >
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               ) : null}

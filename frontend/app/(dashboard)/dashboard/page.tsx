@@ -1,5 +1,11 @@
 "use client";
-import { useMemo } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { DashboardMetrics } from "@/lib/api-types";
@@ -19,10 +25,115 @@ import {
   BarChart3,
   Database,
   ArrowUpRight,
-  CircleDot,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+
+function usePrefersReducedMotion() {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof window === "undefined" || !window.matchMedia) {
+        return () => {};
+      }
+
+      const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+      const update = () => onStoreChange();
+
+      if (typeof mediaQuery.addEventListener === "function") {
+        mediaQuery.addEventListener("change", update);
+        return () => mediaQuery.removeEventListener("change", update);
+      }
+
+      mediaQuery.addListener(update);
+      return () => mediaQuery.removeListener(update);
+    },
+    () => {
+      if (typeof window === "undefined" || !window.matchMedia) {
+        return false;
+      }
+      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    },
+    () => false,
+  );
+}
+
+function useCountUp(target: number, duration = 800, reduceMotion = false) {
+  const [value, setValue] = useState(target);
+  const frameRef = useRef<number>(0);
+  const startValueRef = useRef<number>(0);
+  const currentValueRef = useRef(0);
+
+  useEffect(() => {
+    currentValueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
+    cancelAnimationFrame(frameRef.current);
+
+    if (reduceMotion) {
+      startValueRef.current = target;
+      currentValueRef.current = target;
+      return;
+    }
+
+    if (target === startValueRef.current) return;
+    startValueRef.current = currentValueRef.current;
+    const startValue = startValueRef.current;
+    const start = performance.now();
+    const animate = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const newValue = startValue + (target - startValue) * eased;
+      setValue(newValue);
+      if (progress < 1) {
+        frameRef.current = requestAnimationFrame(animate);
+      } else {
+        startValueRef.current = target;
+        currentValueRef.current = target;
+      }
+    };
+    frameRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frameRef.current);
+  }, [target, duration, reduceMotion]);
+
+  return reduceMotion ? target : value;
+}
+
+function DeltaBadge({
+  value,
+  label,
+  positiveIsGood = true,
+}: {
+  value: number;
+  label: string;
+  positiveIsGood?: boolean;
+}) {
+  const isPositive = value > 0;
+  const isZero = value === 0;
+  const isGood = isPositive === positiveIsGood;
+  const color = isZero
+    ? "text-[#9AA3B2]"
+    : isGood
+      ? "text-[#00C2A8]"
+      : "text-[#FF5C5C]";
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-xs font-medium ${color}`}
+    >
+      {isZero ? null : isPositive ? (
+        <TrendingUp className="w-3 h-3" />
+      ) : (
+        <TrendingDown className="w-3 h-3" />
+      )}
+      {Math.abs(value).toFixed(1)}% {label}
+    </span>
+  );
+}
+
 export default function DashboardPage() {
+  const reduceMotion = usePrefersReducedMotion();
   const metricsQuery = useQuery({
     queryKey: ["dashboard-summary", 24],
     queryFn: async () => {
@@ -76,20 +187,6 @@ export default function DashboardPage() {
     apisQuery.isLoading ||
     endpointCountQuery.isLoading;
 
-  const latencyText = useMemo(() => {
-    if (typeof metrics?.p95_latency_ms !== "number") {
-      return "0.0 ms";
-    }
-    return `${metrics.p95_latency_ms.toFixed(1)} ms`;
-  }, [metrics]);
-
-  const requestCountText = useMemo(() => {
-    if (typeof metrics?.request_count !== "number") {
-      return "0";
-    }
-    return metrics.request_count.toLocaleString();
-  }, [metrics]);
-
   const liveStatus = useMemo(() => {
     const errorRate = (metrics?.error_rate ?? 0) * 100;
     const latency = metrics?.p95_latency_ms ?? 0;
@@ -97,19 +194,40 @@ export default function DashboardPage() {
       return {
         label: "Degraded",
         tone: "text-[#FF5C5C] border-[#FF5C5C]/25 bg-[#FF5C5C]/10",
+        pulse: "bg-[#FF5C5C]",
       };
     }
     if (errorRate > 2 || latency > 450) {
       return {
         label: "Warning",
         tone: "text-[#F5B74F] border-[#F5B74F]/25 bg-[#F5B74F]/10",
+        pulse: "bg-[#F5B74F]",
       };
     }
     return {
       label: "Healthy",
       tone: "text-[#00C2A8] border-[#00C2A8]/25 bg-[#00C2A8]/10",
+      pulse: "bg-[#00C2A8]",
     };
   }, [metrics]);
+
+  const apiCountAnimated = useCountUp(apiCount, 600, reduceMotion);
+  const endpointCountAnimated = useCountUp(endpointCount, 700, reduceMotion);
+  const requestCountAnimated = useCountUp(
+    metrics?.request_count ?? 0,
+    1000,
+    reduceMotion,
+  );
+  const errorRateDisplay = (metrics?.error_rate ?? 0) * 100;
+  const errorRateAnimated = useCountUp(errorRateDisplay, 800, reduceMotion);
+  const p95Latency = metrics?.p95_latency_ms ?? 0;
+  const p95Animated = useCountUp(p95Latency, 800, reduceMotion);
+
+  // TODO: Fetch real historical data from backend to compute actual deltas
+  const deltaApi: number | null = null; // Placeholder: replace with (apiCount - yesterdayApiCount)
+  const deltaP95: number | null = null; // Placeholder: replace with actual latency change
+  const deltaError: number | null = null; // Placeholder: replace with actual error rate change
+  const deltaRequests: number | null = null; // Placeholder: replace with actual request count change
 
   const modules = [
     {
@@ -181,7 +299,7 @@ export default function DashboardPage() {
         </p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:translate-y-[-2px] hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-[#9AA3B2]">
               Total APIs
@@ -191,10 +309,15 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-[#E6EAF2]">{apiCount}</div>
+            <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
+              {Math.round(apiCountAnimated)}
+            </div>
+            {deltaApi !== null && (
+              <DeltaBadge value={deltaApi} label="vs yesterday" />
+            )}
           </CardContent>
         </Card>
-        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:translate-y-[-2px] hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-[#9AA3B2]">
               Total Endpoints
@@ -204,12 +327,15 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-[#E6EAF2]">
-              {endpointCount}
+            <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
+              {Math.round(endpointCountAnimated)}
             </div>
+            {deltaApi !== null && (
+              <DeltaBadge value={deltaApi} label="vs yesterday" />
+            )}
           </CardContent>
         </Card>
-        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:translate-y-[-2px] hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-[#9AA3B2]">
               P95 Latency
@@ -219,12 +345,19 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-[#E6EAF2]">
-              {latencyText}
+            <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
+              {p95Animated.toFixed(1)} ms
             </div>
+            {deltaP95 !== null && (
+              <DeltaBadge
+                value={deltaP95}
+                label="vs yesterday"
+                positiveIsGood={false}
+              />
+            )}
           </CardContent>
         </Card>
-        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:translate-y-[-2px] hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-[#9AA3B2]">
               Error Rate
@@ -234,12 +367,19 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-[#E6EAF2]">
-              {((metrics?.error_rate ?? 0) * 100).toFixed(2)}%
+            <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
+              {errorRateAnimated.toFixed(2)}%
             </div>
+            {deltaError !== null && (
+              <DeltaBadge
+                value={deltaError}
+                label="vs yesterday"
+                positiveIsGood={false}
+              />
+            )}
           </CardContent>
         </Card>
-        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:translate-y-[-2px] hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
+        <Card className="bg-[#161A23]/80 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-[#9AA3B2]">
               Total Requests
@@ -249,9 +389,12 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-[#E6EAF2]">
-              {requestCountText}
+            <div className="text-2xl font-bold text-[#E6EAF2] tabular-nums">
+              {Math.round(requestCountAnimated).toLocaleString()}
             </div>
+            {deltaRequests !== null && (
+              <DeltaBadge value={deltaRequests} label="vs yesterday" />
+            )}
           </CardContent>
         </Card>
       </div>
@@ -266,7 +409,16 @@ export default function DashboardPage() {
               <span
                 className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold ${liveStatus.tone}`}
               >
-                <CircleDot className="w-3 h-3" />
+                <span className={`relative flex h-2.5 w-2.5`}>
+                  {!reduceMotion ? (
+                    <span
+                      className={`animate-ping absolute inline-flex h-full w-full rounded-full ${liveStatus.pulse} opacity-75`}
+                    />
+                  ) : null}
+                  <span
+                    className={`relative inline-flex rounded-full h-2.5 w-2.5 ${liveStatus.pulse}`}
+                  />
+                </span>
                 {liveStatus.label}
               </span>
             </div>
@@ -304,10 +456,10 @@ export default function DashboardPage() {
           {modules.map((module) => (
             <Card
               key={module.name}
-              className="bg-gradient-to-b from-[#161A23] to-[#0F1117] border-[#242938] overflow-hidden relative group"
+              className="bg-linear-to-b from-[#161A23] to-[#0F1117] border-[#242938] overflow-hidden relative group"
             >
               <div
-                className={`absolute inset-0 bg-gradient-to-tr ${module.halo} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
+                className={`absolute inset-0 bg-linear-to-tr ${module.halo} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
               />
               <CardHeader>
                 <module.icon className="w-8 h-8 mb-2" />

@@ -240,3 +240,6 @@ dmypy.json
 scripts/infra
 progress.yaml
 LocalDev/*
+.opencode
+graphify-out
+AGENTS.md

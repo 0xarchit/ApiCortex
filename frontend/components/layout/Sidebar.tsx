@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import {
   BarChart3,
   FlaskConical,
@@ -34,12 +35,18 @@ interface SidebarProps {
 export function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [barAnimated, setBarAnimated] = useState(false);
 
   useEffect(() => {
     for (const item of navItems) {
       router.prefetch(item.href);
     }
   }, [router]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setBarAnimated(true), 600);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <div
@@ -50,7 +57,7 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
     >
       <div className="h-16 flex items-center justify-between px-4 border-b border-[#242938]">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-8 h-8 rounded-lg shrink-0 bg-gradient-to-tr from-[#5B5DFF] to-[#00C2A8] flex items-center justify-center shadow-[0_0_15px_rgba(91,93,255,0.4)]">
+          <div className="w-8 h-8 rounded-lg shrink-0 bg-linear-to-tr from-[#5B5DFF] to-[#00C2A8] flex items-center justify-center shadow-[0_0_15px_rgba(91,93,255,0.4)]">
             <Network className="text-white w-5 h-5" />
           </div>
           {!isCollapsed && (
@@ -99,7 +106,7 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
                 )}
               >
                 {isActive && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-[#3A8DFF] rounded-r-full shadow-[0_0_10px_2px_rgba(58,141,255,0.4)]" />
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.75 h-6 bg-[#3A8DFF] rounded-r-full shadow-[0_0_10px_2px_rgba(58,141,255,0.4)]" />
                 )}
                 <item.icon
                   className={cn(
@@ -123,7 +130,12 @@ export function Sidebar({ isCollapsed, setIsCollapsed }: SidebarProps) {
               <span className="text-[#3A8DFF]">45%</span>
             </p>
             <div className="w-full bg-[#0F1117] rounded-full h-1.5 mb-2 overflow-hidden">
-              <div className="bg-gradient-to-r from-[#5B5DFF] to-[#00C2A8] h-full rounded-full w-[45%]"></div>
+              <motion.div
+                className="bg-linear-to-r from-[#5B5DFF] to-[#00C2A8] h-full rounded-full"
+                initial={{ width: "0%" }}
+                animate={{ width: barAnimated ? "45%" : "0%" }}
+                transition={{ duration: 1.2, ease: "easeOut" }}
+              />
             </div>
             <p className="text-[10px] text-[#9AA3B2]">4.5M / 10M Limit</p>
           </div>

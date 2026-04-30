@@ -1,9 +1,48 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { Network } from "lucide-react";
+import { useMemo } from "react";
+
+function AnimatedBg() {
+  /* eslint-disable react-hooks/purity -- decorative dots: Math.random() called once per mount */
+  const randomDots = useMemo(() => {
+    return Array.from({ length: 12 }, () => ({
+      left: Math.random() * 100,
+      top: Math.random() * 100,
+      duration: 3 + Math.random() * 4,
+      delay: Math.random() * 3,
+    }));
+  }, []);
+  /* eslint-enable react-hooks/purity */
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[#5B5DFF]/20 blur-[120px] animate-pulse" />
+      <div
+        className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[#00C2A8]/20 blur-[120px] animate-pulse"
+        style={{ animationDelay: "1s" }}
+      />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#242938_1px,transparent_1px),linear-gradient(to_bottom,#242938_1px,transparent_1px)] bg-size-[4rem_4rem] mask-[radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-20" />
+      {randomDots.map((dot, i) => (
+        <div
+          key={i}
+          className="absolute w-1.5 h-1.5 rounded-full bg-[#5B5DFF]/40"
+          style={{
+            left: `${dot.left}%`,
+            top: `${dot.top}%`,
+            animation: `float ${dot.duration}s ease-in-out infinite`,
+            animationDelay: `${dot.delay}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function LoginPage() {
   const isProd = process.env.NEXT_PUBLIC_APP_ENV === "prod";
-  const apiUrl = isProd ? "/api-proxy" : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000");
+  const apiUrl = isProd
+    ? "/api-proxy"
+    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   const handleGoogleLogin = () => {
     window.location.href = `${apiUrl}/auth/login/google`;
@@ -13,14 +52,12 @@ export default function LoginPage() {
   };
   return (
     <div className="min-h-screen bg-[#0F1117] flex relative overflow-hidden">
-      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[#5B5DFF]/20 blur-[120px]" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[#00C2A8]/20 blur-[120px]" />
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#242938_1px,transparent_1px),linear-gradient(to_bottom,#242938_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-20" />
+      <AnimatedBg />
       <div className="flex-1 flex flex-col justify-center items-center z-10 px-6">
         <div className="w-full max-w-md bg-[#161A23]/80 backdrop-blur-xl border border-[#242938] rounded-2xl p-8 shadow-[0_10px_40px_rgba(0,0,0,0.25)] relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#5B5DFF] via-[#00C2A8] to-[#3A8DFF]" />
+          <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-[#5B5DFF] via-[#00C2A8] to-[#3A8DFF]" />
           <div className="flex flex-col items-center mb-8">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-[#5B5DFF] to-[#00C2A8] flex items-center justify-center shadow-[0_0_20px_rgba(91,93,255,0.4)] mb-6">
+            <div className="w-12 h-12 rounded-xl bg-linear-to-tr from-[#5B5DFF] to-[#00C2A8] flex items-center justify-center shadow-[0_0_20px_rgba(91,93,255,0.4)] mb-6">
               <Network className="text-white w-7 h-7" />
             </div>
             <h1 className="text-3xl font-bold text-[#E6EAF2] tracking-tight mb-2">

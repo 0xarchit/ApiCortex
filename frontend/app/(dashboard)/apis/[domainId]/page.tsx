@@ -30,6 +30,8 @@ import {
   ArrowLeft,
   PauseCircle,
   PlayCircle,
+  Copy,
+  Check,
 } from "lucide-react";
 import {
   Dialog,
@@ -47,6 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiClient } from "@/lib/api-client";
 import { API, Endpoint } from "@/lib/api-types";
@@ -63,6 +66,35 @@ export default function DomainDetailsPage() {
   const [editingEndpointId, setEditingEndpointId] = useState<string | null>(
     null,
   );
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyBaseUrl = async () => {
+    if (!domain?.base_url) return;
+    try {
+      await navigator.clipboard.writeText(domain.base_url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success("Base URL copied to clipboard");
+    } catch {
+      // Fallback for non-HTTPS contexts or clipboard failures
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = domain.base_url;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast.success("Base URL copied to clipboard");
+      } catch {
+        toast.error("Failed to copy URL");
+      }
+    }
+  };
   const domainQuery = useQuery({
     queryKey: ["api-domain", domainId],
     queryFn: async () => {
@@ -160,17 +192,25 @@ export default function DomainDetailsPage() {
     setIsEndpointModalOpen(true);
   };
   const handleSaveEndpoint = async () => {
-    if (!endpointFormPath) return;
+    const normalizedPath = endpointFormPath.trim();
+    if (!normalizedPath) {
+      toast.error("Endpoint path is required.");
+      return;
+    }
+    if (!normalizedPath.startsWith("/")) {
+      toast.error("Path must start with /");
+      return;
+    }
     try {
       if (editingEndpointId) {
         await apiClient.patch(`/endpoints/${editingEndpointId}`, {
-          path: endpointFormPath,
+          path: normalizedPath,
           method: endpointFormMethod,
         });
       } else {
         await apiClient.post("/endpoints", {
           api_id: domainId,
-          path: endpointFormPath,
+          path: normalizedPath,
           method: endpointFormMethod,
         });
       }
@@ -224,8 +264,16 @@ export default function DomainDetailsPage() {
             <h1 className="text-3xl font-bold text-[#E6EAF2] tracking-tight">
               {domain?.name} Endpoints
             </h1>
-            <p className="text-[#9AA3B2] mt-1 font-mono text-sm">
+            <p className="text-[#9AA3B2] mt-1 font-mono text-sm flex items-center gap-2">
               {domain?.base_url}
+              <button
+                aria-label="Copy base URL"
+                onClick={(e) => { e.stopPropagation(); handleCopyBaseUrl(); }}
+                className="text-[#9AA3B2] hover:text-[#E6EAF2] transition-colors"
+                title="Copy base URL"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-[#00C2A8]" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
             </p>
           </div>
           <Button

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { BarChart3, Clock, AlertTriangle, Activity } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +14,17 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { useQuery } from "@tanstack/react-query";
+
+type TimeRange = "1h" | "24h" | "7d" | "30d";
 
 interface TelemetryEndpointStatsOut {
   endpoint: string;
@@ -24,24 +35,40 @@ interface TelemetryEndpointStatsOut {
 }
 
 export default function TelemetryPage() {
+  const [timeRange, setTimeRange] = useState<TimeRange>("24h");
   const telemetryQuery = useQuery({
-    queryKey: ["telemetry-endpoints"],
+    queryKey: ["telemetry-endpoints", timeRange],
     queryFn: async () => {
       const response = await apiClient.get<TelemetryEndpointStatsOut[]>(
         "/telemetry/endpoints",
+        { params: { window: timeRange } },
       );
       return response.data;
     },
     staleTime: 2 * 60 * 1000,
   });
 
-  const data = telemetryQuery.data ?? [];
+  const data = useMemo(() => telemetryQuery.data ?? [], [telemetryQuery.data]);
   const loading = telemetryQuery.isLoading;
   const error = telemetryQuery.error
     ? telemetryQuery.error instanceof Error
       ? telemetryQuery.error.message
       : "Failed to load telemetry data."
     : null;
+
+  const sparkData = useMemo(() => {
+    return data.map((item) => ({
+      ...item,
+      // TODO: Replace with real historical trend data from backend
+      isSyntheticTrend: true,
+      trend: Array.from({ length: 6 }, (_, i) => ({
+        i,
+        v:
+          item.p95_latency_ms *
+          (0.7 + Math.sin(i * 1.2) * 0.3 + Math.random() * 0.1),
+      })),
+    }));
+  }, [data]);
 
   const getMethodColor = (method: string) => {
     switch (method) {
@@ -64,23 +91,23 @@ export default function TelemetryPage() {
     return (
       <div className="space-y-6 animate-in fade-in duration-300">
         <div className="space-y-2">
-          <Skeleton className="h-9 w-56 bg-[#242938]" />
-          <Skeleton className="h-4 w-96 bg-[#161A23]" />
+          <Skeleton className="h-9 w-56 bg-[#242938] skeleton-shimmer" />
+          <Skeleton className="h-4 w-96 bg-[#161A23] skeleton-shimmer" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {Array.from({ length: 3 }).map((_, index) => (
             <Skeleton
               key={index}
-              className="h-32 w-full rounded-xl bg-[#161A23] border border-[#242938]"
+              className="h-32 w-full rounded-xl bg-[#161A23] border border-[#242938] skeleton-shimmer"
             />
           ))}
         </div>
         <div className="bg-[#161A23]/50 border border-[#242938] rounded-xl p-4 space-y-3">
-          <Skeleton className="h-6 w-52 bg-[#242938]" />
+          <Skeleton className="h-6 w-52 bg-[#242938] skeleton-shimmer" />
           {Array.from({ length: 8 }).map((_, index) => (
             <Skeleton
               key={index}
-              className="h-11 w-full bg-[#0F1117] border border-[#242938] rounded-lg"
+              className="h-11 w-full bg-[#0F1117] border border-[#242938] rounded-lg skeleton-shimmer"
             />
           ))}
         </div>
@@ -114,21 +141,37 @@ export default function TelemetryPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-[#E6EAF2] mb-1 tracking-tight">
-          API Telemetry
-        </h1>
-        <p className="text-[#9AA3B2] text-sm">
-          Deep visibility into your API performance, endpoint latency, and
-          traffic patterns.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-[#E6EAF2] mb-1 tracking-tight">
+            API Telemetry
+          </h1>
+          <p className="text-[#9AA3B2] text-sm">
+            Deep visibility into your API performance, endpoint latency, and
+            traffic patterns.
+          </p>
+        </div>
+        <Select
+          value={timeRange}
+          onValueChange={(v) => setTimeRange(v as TimeRange)}
+        >
+          <SelectTrigger className="w-28 bg-[#161A23] border-[#242938] text-[#E6EAF2]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="bg-[#161A23] border-[#242938] text-[#E6EAF2]">
+            <SelectItem value="1h">Last 1h</SelectItem>
+            <SelectItem value="24h">Last 24h</SelectItem>
+            <SelectItem value="7d">Last 7d</SelectItem>
+            <SelectItem value="30d">Last 30d</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-[#161A23]/50 backdrop-blur-sm border-[#242938]">
+        <Card className="bg-[#161A23]/50 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-[#9AA3B2]">
-              Total Requests (24h)
+              Total Requests ({timeRange})
             </CardTitle>
             <Activity className="h-4 w-4 text-[#00C2A8]" />
           </CardHeader>
@@ -139,10 +182,10 @@ export default function TelemetryPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-[#161A23]/50 backdrop-blur-sm border-[#242938]">
+        <Card className="bg-[#161A23]/50 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-[#9AA3B2]">
-              Avg Error Rate (24h)
+              Avg Error Rate ({timeRange})
             </CardTitle>
             <AlertTriangle className="h-4 w-4 text-[#FF5C5C]" />
           </CardHeader>
@@ -153,7 +196,7 @@ export default function TelemetryPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-[#161A23]/50 backdrop-blur-sm border-[#242938]">
+        <Card className="bg-[#161A23]/50 backdrop-blur-sm border-[#242938] transition-all hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(0,0,0,0.3)]">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-[#9AA3B2]">
               Avg P95 Latency
@@ -187,7 +230,7 @@ export default function TelemetryPage() {
                   Endpoint
                 </TableHead>
                 <TableHead className="text-[#9AA3B2] font-medium text-right">
-                  Traffic (24h)
+                  Traffic ({timeRange})
                 </TableHead>
                 <TableHead className="text-[#9AA3B2] font-medium text-right">
                   Error Rate
@@ -195,20 +238,23 @@ export default function TelemetryPage() {
                 <TableHead className="text-[#9AA3B2] font-medium text-right">
                   P95 Latency
                 </TableHead>
+                <TableHead className="text-[#9AA3B2] font-medium text-right w-22.5">
+                  Trend
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.length === 0 ? (
                 <TableRow className="border-[#242938] hover:bg-[#1E232E]">
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center py-8 text-[#9AA3B2]"
                   >
                     No telemetry data found for the selected window.
                   </TableCell>
                 </TableRow>
               ) : (
-                data.map((item, i) => (
+                sparkData.map((item, i) => (
                   <TableRow
                     key={i}
                     className="border-[#242938] hover:bg-[#1E232E] transition-colors"
@@ -222,7 +268,7 @@ export default function TelemetryPage() {
                       </Badge>
                     </TableCell>
                     <TableCell
-                      className="font-mono text-sm text-[#E6EAF2] truncate max-w-[300px]"
+                      className="font-mono text-sm text-[#E6EAF2] truncate max-w-75"
                       title={item.endpoint}
                     >
                       {item.endpoint}
@@ -246,6 +292,27 @@ export default function TelemetryPage() {
                     <TableCell className="text-right tabular-nums">
                       <div className="flex items-center justify-end gap-2 text-[#E6EAF2]">
                         {item.p95_latency_ms.toFixed(0)} ms
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end" title={item.isSyntheticTrend ? "Trend is illustrative only — real data pending" : undefined}>
+                          <ResponsiveContainer
+                            width={70}
+                            height={28}
+                            className={item.isSyntheticTrend ? "opacity-50" : undefined}
+                          >
+                            <LineChart data={item.trend}>
+                            <Line
+                              type="monotone"
+                              dataKey="v"
+                              stroke={
+                                item.error_rate > 0.05 ? "#FF5C5C" : "#00C2A8"
+                              }
+                              strokeWidth={1.5}
+                              dot={false}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
                       </div>
                     </TableCell>
                   </TableRow>
