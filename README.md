@@ -21,7 +21,7 @@ Predict API Failures Before They Happen
 </div>
 
 
-[![Status](https://img.shields.io/badge/Status-Active%20Development-000000.svg?style=for-the-badge&logo=rocket&logoColor=white&labelColor=000000&color=000000)](https://github.com/0xArchit/ApiCortex/pulse)
+[![Status](https://img.shields.io/badge/Status-MVP%20Deployed-000000.svg?style=for-the-badge&logo=rocket&logoColor=white&labelColor=000000&color=000000)](https://github.com/0xArchit/ApiCortex/pulse)
 [![License](https://img.shields.io/badge/License-AGPL%20v3-000000.svg?style=for-the-badge&logo=gnu&logoColor=white&labelColor=000000&color=000000)](LICENSE)  
 [![Python](https://img.shields.io/badge/Python-3.11-000000.svg?style=for-the-badge&logo=python&logoColor=white&labelColor=000000&color=000000)](https://www.python.org)
 [![Go](https://img.shields.io/badge/Go-1.26+-000000.svg?style=for-the-badge&logo=go&logoColor=white&labelColor=000000&color=000000)](https://go.dev)
@@ -41,8 +41,9 @@ Predict API Failures Before They Happen
 8. [Usage](#-usage)
 9. [Monitoring](#-monitoring)
 10. [Troubleshooting](#-troubleshooting)
-11. [Dependencies](#-dependencies)
-12. [License](#-license)
+11. [Screenshots Gallery](#-screenshots-gallery)
+12. [Dependencies](#-dependencies)
+13. [License](#-license)
 
 ---
 
@@ -664,6 +665,43 @@ go test ./...
 pytest
 npm test
 ```
+
+---
+
+## ✦ Screenshots Gallery
+
+<table>
+  <tr>
+    <td align="center"><strong>Landing Experience</strong><br><img src="assets/screenshots/apicortex_landingpage.png" width="100%" /></td>
+    <td align="center"><strong>Authentication Screen</strong><br><img src="assets/screenshots/apicortex_authpage.png" width="100%" /></td>
+    <td align="center"><strong>Main Dashboard</strong><br><img src="assets/screenshots/apicortex_dashboard.png" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>API Domains</strong><br><img src="assets/screenshots/apicortex_apipage.png" width="100%" /></td>
+    <td align="center"><strong>API Testing Workspace</strong><br><img src="assets/screenshots/apicortex_apitestingpage.png" width="100%" /></td>
+    <td align="center"><strong>Telemetry View</strong><br><img src="assets/screenshots/apicortex_telementrypage.png" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Predictions Dashboard</strong><br><img src="assets/screenshots/apicortex_predictionspage.png" width="100%" /></td>
+    <td align="center"><strong>User Profile</strong><br><img src="assets/screenshots/apicortex_profilepage.png" width="100%" /></td>
+    <td align="center"><strong>Organization Settings</strong><br><img src="assets/screenshots/apicortex_settingspage.png" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Confusion Matrix</strong><br><img src="assets/screenshots/confusion_matrix.png" width="100%" /></td>
+    <td align="center"><strong>Backtesting Timeline</strong><br><img src="assets/screenshots/actual_vs_predicted_backtesting.png" width="100%" /></td>
+    <td align="center"><strong>SHAP Feature Impact</strong><br><img src="assets/screenshots/summary_plot.png" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Platform Architecture</strong><br><img src="assets/screenshots/apicortex_systemarch.png" width="100%" /></td>
+    <td align="center"><strong>Architecture (Legacy)</strong><br><img src="assets/screenshots/apicortex_systemarch_old.png" width="100%" /></td>
+    <td align="center"><strong>Telemetry Workflow</strong><br><img src="assets/screenshots/apicortex_telemetry_workflow.png" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Data Flow Diagram</strong><br><img src="assets/screenshots/apicortex_dfd.png" width="100%" /></td>
+    <td align="center"><strong>ML Pipeline</strong><br><img src="assets/screenshots/apicortex_ml_pipeline.png" width="100%" /></td>
+    <td align="center"><strong>Contract Validation Flow</strong><br><img src="assets/screenshots/apicortex_contract_validation_flow.png" width="100%" /></td>
+  </tr>
+</table>
 
 ---
 

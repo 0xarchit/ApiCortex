@@ -243,3 +243,6 @@ LocalDev/*
 .opencode
 graphify-out
 AGENTS.md
+GEMINI.md
+.gemini
+ProjectFile
